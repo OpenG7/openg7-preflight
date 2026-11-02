@@ -1,0 +1,51 @@
+{
+  "name": "openg7-preflight",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.19.0",
+  "engines": {
+    "node": ">=22.12.0 <23 || >=24.0.0 <25",
+    "npm": ">=10"
+  },
+  "workspaces": [
+    "apps/admin-web"
+  ],
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "node --env-file=.env --import tsx apps/api/src/main.ts",
+    "dev:worker": "node --env-file=.env --import tsx apps/worker/src/main.ts",
+    "dev:web": "npm run start --workspace=@openg7/admin-web",
+    "build:server": "tsc -p tsconfig.json",
+    "build:web": "npm run build --workspace=@openg7/admin-web",
+    "build": "npm run build:server && npm run build:web",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start:api": "node --env-file=.env dist/apps/api/src/main.js",
+    "start:worker": "node --env-file=.env dist/apps/worker/src/main.js",
+    "db:migrate": "node --env-file=.env --import tsx scripts/migrate.ts",
+    "infra:up": "docker compose up -d --wait postgres",
+    "infra:down": "docker compose down",
+    "demo:submit": "node --env-file=.env scripts/submit-demo.mjs",
+    "test": "node --import tsx --test tests/ai.test.ts tests/api.test.ts tests/contracts.test.ts tests/engine.test.ts",
+    "test:integration": "node --env-file=.env scripts/test-integration.mjs",
+    "test:web": "node --env-file=.env node_modules/@playwright/test/cli.js test",
+    "test:standards": "node --test scripts/__tests__/standards.test.mjs",
+    "check:standards": "node scripts/check-project-standards.mjs"
+  },
+  "dependencies": {
+    "@fastify/rate-limit": "10.3.0",
+    "fastify": "5.12.8",
+    "jose": "6.2.15",
+    "pg": "8.23.1",
+    "pg-boss": "12.38.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "22.19.15",
+    "@types/pg": "8.18.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}

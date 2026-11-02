@@ -1,0 +1,51 @@
+name: openg7-preflight
+services:
+  postgres:
+    image: postgres:17.9-alpine
+    environment:
+      POSTGRES_USER: preflight
+      POSTGRES_PASSWORD: preflight_local
+      POSTGRES_DB: preflight
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - preflight-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/01-test-database.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U preflight -d preflight"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  api:
+    profiles: [full]
+    build: .
+    command: ["node", "dist/apps/api/src/main.js"]
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      AUTH_MODE: jwt
+      DATABASE_URL: postgresql://preflight:preflight_local@postgres:5432/preflight
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL:-}
+      AI_PROVIDER: mock
+    ports: ["127.0.0.1:3000:3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres: { condition: service_healthy }
+  worker:
+    profiles: [full]
+    build: .
+    command: ["node", "dist/apps/worker/src/main.js"]
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://preflight:preflight_local@postgres:5432/preflight
+      AI_PROVIDER: mock
+    depends_on:
+      postgres: { condition: service_healthy }
+volumes:
+  preflight-data:

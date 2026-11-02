@@ -1,28 +1,24 @@
-# Architecture du template OpenG7
+# Architecture OpenG7 Preflight
 
-## Responsabilité
+Preflight est un monolithe modulaire de préparation opérationnelle, avec processus
+HTTP et worker indépendants, une base PostgreSQL et une console Angular.
+Il prépare des propositions sans prendre l’autorité métier des applications sources.
 
-Ce dépôt possède le standard commun, ses budgets et son mécanisme de propagation.
-Il fournit une structure adaptable aux missions OpenG7, sans application ni stack
-imposée. Les règles d’exécution sont dans [AGENTS.md](../AGENTS.md).
+Les responsabilités et contrats suivent les dépendances : applications → moteur
+et ports → contrats. Les contrôleurs ne définissent pas les workflows. La console
+présente des données persistées et laisse les contrôles d’autorité au serveur.
 
-## Propriété des documents
+| Référence propriétaire | Sujet |
+| --- | --- |
+| [Vision](architecture/vision.md) | Promesse et frontières métier |
+| [Contexte système](architecture/system-context.md) | Contexte et diagramme des modules |
+| [Modèle de domaine](architecture/domain-model.md) | Missions, tâches, résultats, propositions et lots |
+| [Cycle de vie](architecture/mission-lifecycle.md) | États et transitions |
+| [Moteur de workflows](architecture/workflow-engine.md) | Séquence, dépendances, file et durabilité |
+| [Intégration IA](architecture/ai-integration.md) | Fournisseurs, validation, budget et provenance |
+| [Sécurité](architecture/security-model.md) | Identités, permissions et isolation |
+| [Intégrations](architecture/ecosystem-integration.md) | Contrats inspectés et ports non raccordés |
+| [Préparation opérationnelle](architecture/operational-readiness.md) | Déploiement local, preuves et limites |
 
-- [Socle](standards/agent-common.md) : source du bloc identique de chaque AGENTS racine.
-- [Standard](standards/README.md) : organisation, budgets, contrôle et synchronisation.
-- Mission, architecture et lectures conditionnelles : propriété de chaque projet.
-- Instructions d’outil et skills : pointeurs locaux; aucune copie de registres produit.
-- Registres, schémas, APIs, runbooks : références du dépôt qui les implémente.
-
-## Propagation
-
-La direction est template → bloc commun et fichiers explicitement gérés.
-Le [manifest](../scripts/sync-manifest.json) exclut les architectures, missions,
-workflows applicatifs, instructions spécialisées et skills des projets.
-Le synchroniseur valide toutes les préconditions avant écriture; il exige les
-marqueurs du bloc, refuse chemins sortants et liens symboliques, et conserve
-à l’octet près le texte local hors bloc. Les modes check/dry-run ne mutent rien.
-
-Chaque dépôt reste utilisable seul. Le contrôle local compare le bloc à sa copie
-du socle; le contrôle de synchronisation détecte la dérive par rapport au template.
-La revue vérifie le périmètre métier, que le contrôle textuel ne peut pas prouver.
+Les [consignes](../AGENTS.md) décrivent les règles d’exécution. Le [standard OpenG7](standards/README.md)
+et son bloc commun restent synchronisables indépendamment de l’architecture produit.

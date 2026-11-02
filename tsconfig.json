@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023", "DOM"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "sourceMap": true,
+    "types": ["node"]
+  },
+  "include": ["apps/api/**/*.ts", "apps/worker/**/*.ts", "packages/**/*.ts", "scripts/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", "dist", "apps/admin-web"]
+}

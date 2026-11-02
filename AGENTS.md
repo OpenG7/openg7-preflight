@@ -1,9 +1,11 @@
-# OpenG7 Project Template — consignes
+# OpenG7 Preflight — consignes
 
 ## Mission
 
-Maintenir le standard de gouvernance commun et son outillage de validation et
-de synchronisation. Ce dépôt ne contient aucune application produit.
+Construire le système transverse de préparation opérationnelle OpenG7 Preflight.
+Il reçoit des missions, prépare des résultats et propositions vérifiables et
+alimente un briefing persistant. L’IA prépare; les humains gouvernent; chaque
+application source conserve ses règles et son autorité métier.
 
 <!-- openg7:common:start -->
 
@@ -42,33 +44,44 @@ de synchronisation. Ce dépôt ne contient aucune application produit.
 
 ## Périmètre local
 
-- Le socle reste indépendant de la stack. Registres UI, APIs et règles métier
-  appartiennent à leur dépôt; aucun exemple Nexus ne devient une obligation générale.
-- La synchronisation ne remplace que le bloc commun et ses fichiers gérés.
-  Préserver mission, architecture, consignes locales et personnalisations produit.
-- Tout changement du synchroniseur se vérifie dans des dépôts temporaires :
-  préservation des sections locales, idempotence, modes lecture seule et erreurs
-  sans écriture partielle pour les préconditions invalides.
+- Node.js 22.12+, TypeScript strict, npm unique, Fastify, PostgreSQL/pg-boss;
+  console Angular standalone. API HTTP et worker sont des processus indépendants.
+- Contrats publics versionnés dans packages/contracts; orchestration générique
+  dans packages/engine; fournisseurs dans packages/ai; ports dans packages/integrations.
+- Toujours filtrer les opérations par tenant et applications autorisées. Valider
+  permissions, version source et état avant mutation; auditer les interventions.
+- Une proposition n’est jamais une approbation métier. Aucun paiement, publication
+  externe ou accès en écriture aux bases des applications sources.
+- Les simulations sont explicites dans les résultats et la console. Ne pas
+  inventer de contrat d’intégration ni présenter un adaptateur non raccordé comme actif.
+- Réception et traitements sont idempotents; effets externes au moins une fois
+  avec contrôle explicite, sans promesse exactly-once. Préserver les résultats
+  intermédiaires et bloquer les résultats devenus obsolètes.
+- Conserver le bloc commun synchronisé; la mission et l’architecture sont locales.
 
 ## Lectures selon la tâche
 
 <!-- prettier-ignore -->
 | Déclencheur | Référence |
 | --- | --- |
-| Frontières de gouvernance | [Architecture](docs/ARCHITECTURE.md) |
-| Budgets, structure des consignes | [Standard](docs/standards/README.md) |
-| Propagation | [Manifest](scripts/sync-manifest.json), script de synchronisation |
+| Frontières et dépendances | [Architecture](docs/ARCHITECTURE.md) |
+| Missions, tâches et reprise | [Moteur](docs/architecture/workflow-engine.md), [cycle de vie](docs/architecture/mission-lifecycle.md) |
+| Contrats et intégrations | [Contrats](docs/contracts.md), [intégrations](docs/architecture/ecosystem-integration.md) |
+| Authentification et isolation | [Sécurité](docs/architecture/security-model.md) |
+| Budgets des consignes ou propagation du socle | [Standard](docs/standards/README.md), [manifest](scripts/sync-manifest.json) |
 | CI ou dispatch | [Workflows](.github/workflows/README.md) |
 
 ## Validation
 
-Documentation/gouvernance : `node scripts/check-project-standards.mjs` et
-`git diff --check`. Pour du code, lire le manifest et la CI concernés; ne pas
-annoncer un lint, test ou build absent comme exécuté.
+Documentation/gouvernance : `npm run check:standards` et `git diff --check`.
+Code : `npm run typecheck`, `npm test`, `npm run build` selon la portée.
+Persistance/reprise : `npm run test:integration`, avec une base PostgreSQL de test
+distincte configurée par TEST_DATABASE_URL; ne jamais utiliser une base métier.
 
 Outillage modifié : `node --test scripts/__tests__/standards.test.mjs`.
 
 ## Maintenance
 
 Pour changer les consignes : [standard et budgets](docs/standards/README.md).
-Conserver le bloc commun synchronisé et les différences dans leur périmètre.
+Mettre à jour contrats, migrations et documentation propriétaire ensemble.
+Les migrations appliquées sont immuables; ajouter une migration versionnée.

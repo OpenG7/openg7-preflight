@@ -1,0 +1,62 @@
+<a class="skip-link" href="#main-content">Aller au contenu</a>
+<div class="shell">
+  <aside class="sidebar" aria-label="Navigation principale">
+    <a class="brand" href="/" aria-label="OpenG7 Preflight — accueil">
+      <span class="brand-mark" aria-hidden="true">P<span>↗</span></span>
+      <span><strong>OpenG7</strong><span class="brand-product">PREFLIGHT</span></span>
+    </a>
+    <p class="nav-caption">ESPACE OPÉRATIONNEL</p>
+    <nav>
+      @for (item of nav; track item.id) {
+        <button type="button" class="nav-item" [class.active]="active() === item.id" [attr.aria-label]="item.title" [title]="item.title" [attr.aria-current]="active() === item.id ? 'page' : null" (click)="active.set(item.id)">
+          <span class="nav-icon" aria-hidden="true">{{item.icon}}</span><span>{{item.title}}</span>
+          @if (active() === item.id) { <span class="nav-indicator" aria-hidden="true"></span> }
+        </button>
+      }
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="principle"><span class="small-orbit" aria-hidden="true"></span><p>L’IA prépare.<br><strong>Les humains gouvernent.</strong></p></div>
+      <div class="workspace-label"><span class="avatar">{{api.session()?.tenantId?.slice(0, 2)?.toUpperCase() || 'OG'}}</span><div><strong>{{api.session()?.tenantId || 'Session requise'}}</strong><span>{{api.session()?.roles?.join(', ') || 'Aucun accès établi'}}</span></div></div>
+    </div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar">
+      <div class="breadcrumb">Command Center <span>/</span> <strong>{{title()}}</strong></div>
+      <div class="topbar-actions">
+        <span class="connection" [class.connected]="api.session()"><span></span>{{api.session() ? 'Session établie' : 'Non connecté'}}</span>
+        <button type="button" class="icon-button" aria-label="Actualiser les données" (click)="api.refresh()" [disabled]="!api.session()">↻</button>
+        <button type="button" class="button secondary compact" (click)="authOpen.set(!authOpen())">Session</button>
+      </div>
+    </header>
+    @if (api.session()?.authMode === 'development') {
+      <div class="environment-banner"><span class="tag">LOCAL</span> Identité de développement explicite · aucune connexion métier de production.</div>
+    }
+    @if (authOpen()) {
+      <section class="session-panel" aria-labelledby="session-heading">
+        <div><h2 id="session-heading">Accès à la console</h2><p>Jeton d’accès JWT conservé en mémoire uniquement. Le raccordement de connexion OpenG7 reste à configurer.</p></div>
+        <form class="session-form" (ngSubmit)="login()">
+          <label for="access-token">Jeton d’accès</label>
+          <input id="access-token" name="token" type="password" [(ngModel)]="token" autocomplete="off" spellcheck="false" placeholder="JWT fourni par votre identité autorisée">
+          <button type="submit" class="button" [disabled]="authBusy()">{{authBusy() ? 'Vérification…' : 'Connecter'}}</button>
+          @if (api.session()) { <button class="button secondary" type="button" (click)="logout()">Déconnecter</button> }
+        </form>
+        @if (authError()) { <p class="error-text" role="alert">{{authError()}}</p> }
+      </section>
+    }
+    <main id="main-content" tabindex="-1">
+      @if (api.session()) {
+        @switch (active()) {
+          @case ('briefing') { <app-briefing (openMissions)="active.set('missions')" (openReviews)="active.set('reviews')"/> }
+          @case ('missions') { <app-missions/> }
+          @case ('reviews') { <app-review/> }
+          @case ('supervision') { <app-missions [supervision]="true"/> }
+          @case ('integrations') { <app-settings mode="integrations"/> }
+          @case ('policies') { <app-settings mode="policies"/> }
+        }
+      } @else {
+        <section class="empty-state large"><span class="empty-icon" aria-hidden="true">◈</span><h1>Votre travail préparé, au même endroit.</h1><p>Connectez-vous pour retrouver les missions, résultats et propositions réellement conservés par Preflight.</p><button type="button" class="button" (click)="connect()">Réessayer la connexion</button></section>
+      }
+    </main>
+    <footer class="footer"><span>OpenG7 Preflight</span><span>Préparation autonome · autorité métier préservée</span></footer>
+  </div>
+</div>

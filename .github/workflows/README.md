@@ -1,10 +1,12 @@
-# Workflows du template
+# Workflows OpenG7 Preflight
 
-Ce dépôt ne contient pas d’application. Aucun workflow générique ne doit exiger
-Angular, Strapi, un manifest ou un lockfile absent.
+preflight-ci.yml vérifie l’application Node22/Angular et son moteur PostgreSQL17 :
+installation npm, contrats, types, tests, intégration, gouvernance et builds.
+Les workflows du socle hérités restent séparés.
 
 | Workflow                                   | Portée                                                                                                            |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| preflight-ci.yml | Application, PostgreSQL de test, types et builds Angular/serveur |
 | agent-standards.yml                        | Standard commun : socle, sections, budgets, liens/ancres, instructions et skills; sans installation de dépendance |
 | template-quality.yml                       | Tests du validateur/synchroniseur dans des répertoires temporaires; propre au template                            |
 | sync-standards.yml                         | Dispatch manuel vers un dépôt cible; synchronise le seul socle et ouvre une PR selon les inputs                   |
@@ -23,6 +25,6 @@ et un AGENTS déjà migré avec ses marqueurs. Un échec de précondition arrêt
 workflow. Le standard de la cible est vérifié avant la création de PR. Aucun
 workflow de synchronisation n’est déclenché automatiquement sur push.
 
-Les contrôles applicatifs (build, E2E, seeds, déploiement) appartiennent aux dépôts
-produits. Leurs anciens modèles restent dans l’historique Git; les adapter à
-l’implémentation réelle avant usage. Instructions : [README](../../README.md).
+La CI ne publie ni ne déploie Preflight. Les dispatchs fournisseurs hérités ne
+constituent pas des intégrations actives; leurs secrets doivent être configurés
+avant usage explicite. Instructions : [README](../../README.md).
