@@ -1,0 +1,183 @@
+name: Claude Branch and PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Instruction courte pour Claude (ex: corriger un bug, ajouter un test, mettre a jour une doc).'
+        required: true
+        type: string
+      scope:
+        description: 'Repertoire relatif a cibler (ex: src, packages/contracts). Laisser vide ou "repository-root" pour l ensemble du depot.'
+        required: false
+        default: repository-root
+        type: string
+      base_branch:
+        description: 'Branche de base pour la PR.'
+        required: true
+        default: main
+        type: string
+      draft_pr:
+        description: 'Ouvrir la PR en brouillon.'
+        required: true
+        default: true
+        type: boolean
+      model:
+        description: 'Modele Claude optionnel. Laisser vide pour le defaut du workflow.'
+        required: false
+        default: ''
+        type: string
+      effort:
+        description: 'Indication d effort optionnelle, transmise dans le prompt.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: claude-pr-${{ github.ref }}-${{ github.event.inputs.scope }}
+  cancel-in-progress: false
+
+jobs:
+  claude-pr:
+    name: Run Claude and open PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.base_branch }}
+          fetch-depth: 0
+
+      - name: Resolve allowed working directory
+        id: scope
+        shell: bash
+        run: |
+          raw="${{ github.event.inputs.scope }}"
+          if [ -z "$raw" ] || [ "$raw" = "repository-root" ] || [ "$raw" = "." ]; then
+            workdir="."
+            slug="repository-root"
+          else
+            case "$raw" in
+              /*|*..*)
+                echo "Unsupported scope: must be a relative path without '..': $raw" >&2
+                exit 1
+                ;;
+              *)
+                workdir="$raw"
+                slug="$(printf '%s' "$raw" | tr '/ ' '--')"
+                ;;
+            esac
+          fi
+
+          branch="claude/${slug}-${{ github.run_id }}-${{ github.run_attempt }}"
+          echo "workdir=$workdir" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Detect package manager
+        id: pm
+        shell: bash
+        run: |
+          if [ -f yarn.lock ]; then
+            echo "pm=yarn" >> "$GITHUB_OUTPUT"
+            echo "install=corepack enable && yarn install --immutable" >> "$GITHUB_OUTPUT"
+            echo "cache=yarn" >> "$GITHUB_OUTPUT"
+          elif [ -f pnpm-lock.yaml ]; then
+            echo "pm=pnpm" >> "$GITHUB_OUTPUT"
+            echo "install=corepack enable && pnpm install --frozen-lockfile" >> "$GITHUB_OUTPUT"
+            echo "cache=pnpm" >> "$GITHUB_OUTPUT"
+          elif [ -f package-lock.json ]; then
+            echo "pm=npm" >> "$GITHUB_OUTPUT"
+            echo "install=npm ci" >> "$GITHUB_OUTPUT"
+            echo "cache=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "pm=none" >> "$GITHUB_OUTPUT"
+            echo "install=echo 'No lockfile found, skipping install'" >> "$GITHUB_OUTPUT"
+            echo "cache=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: ${{ steps.pm.outputs.cache }}
+
+      - name: Install workspace dependencies
+        if: steps.pm.outputs.pm != 'none'
+        run: ${{ steps.pm.outputs.install }}
+
+      - name: Run Claude in selected scope
+        id: run_claude
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: ${{ github.event.inputs.model || 'claude-sonnet-4-5' }}
+          allowed_tools: >-
+            Edit,Read,Write,Bash(git:*),Bash(yarn:*),Bash(npx:*),Bash(node:*),Bash(npm:*),Bash(pnpm:*),Bash(rg:*),Bash(ls:*),Bash(find:*)
+          prompt: |
+            You are preparing a focused repository change for OpenG7.
+
+            Requested task:
+            ${{ github.event.inputs.task }}
+
+            Required constraints:
+            - Follow the repository instructions in AGENTS.md.
+            - Prefer the smallest correct change that satisfies the task.
+            - Keep changes inside or adjacent to the selected scope when possible: ${{ steps.scope.outputs.workdir }}.
+            - Restrict edits to files under `${{ steps.scope.outputs.workdir }}` unless a directly adjacent shared contract, test, route constant, or runtime config must also change.
+            - Do not modify secrets, workflow tokens, deployment credentials, or unrelated files.
+            - Run the narrowest validation that proves the edited slice works.
+            - If the request is ambiguous, unsafe, or cannot be completed confidently, do not guess. Explain the blocker in the final message.
+            - If the optional effort hint is provided, treat it as guidance only: `${{ github.event.inputs.effort }}`.
+
+            Git context:
+            - Base branch: ${{ github.event.inputs.base_branch }}
+            - Branch to publish: ${{ steps.scope.outputs.branch }}
+            - Triggered by: @${{ github.actor }}
+
+            Final message format:
+            Summary: short paragraph
+            Validation: commands run and results
+            Risks: only if material risks remain
+
+      - name: Create pull request from Claude changes
+        id: create_pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ github.token }}
+          base: ${{ github.event.inputs.base_branch }}
+          branch: ${{ steps.scope.outputs.branch }}
+          commit-message: 'chore(claude): ${{ github.event.inputs.task }}'
+          title: 'Claude: ${{ github.event.inputs.task }}'
+          draft: ${{ github.event.inputs.draft_pr }}
+          delete-branch: true
+          body: |
+            ## Claude run
+
+            - Triggered by: @${{ github.actor }}
+            - Scope: `${{ github.event.inputs.scope }}`
+            - Working directory target: `${{ steps.scope.outputs.workdir }}`
+            - Base branch: `${{ github.event.inputs.base_branch }}`
+            - Workflow run: `${{ github.run_id }}`
+
+            Review the workflow logs for the complete Claude transcript and validations.
+
+      - name: Publish workflow summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Claude Branch and PR"
+            echo
+            echo "- Scope: ${{ github.event.inputs.scope }}"
+            echo "- Working directory target: ${{ steps.scope.outputs.workdir }}"
+            echo "- Base branch: ${{ github.event.inputs.base_branch }}"
+            if [ -n "${{ steps.create_pr.outputs.pull-request-url }}" ]; then
+              echo "- Pull request: ${{ steps.create_pr.outputs.pull-request-url }}"
+            else
+              echo "- Pull request: no code change detected or PR not created"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

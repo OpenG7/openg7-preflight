@@ -1,0 +1,67 @@
+name: Copilot Branch and PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Instruction courte pour Copilot.'
+        required: true
+        type: string
+      scope:
+        description: 'Repertoire relatif demande pour la tentative de delegation. Laisser vide ou "repository-root" pour l ensemble du depot.'
+        required: false
+        default: repository-root
+        type: string
+      base_branch:
+        description: 'Branche de base pour la PR.'
+        required: true
+        default: main
+        type: string
+      draft_pr:
+        description: 'Ouvrir la PR en brouillon.'
+        required: true
+        default: true
+        type: boolean
+      model:
+        description: 'Modele GitHub optionnel.'
+        required: false
+        default: ''
+        type: string
+      effort:
+        description: 'Indication d effort optionnelle.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: copilot-pr-${{ github.ref }}-${{ github.event.inputs.scope }}
+  cancel-in-progress: false
+
+jobs:
+  copilot-pr:
+    name: Fail fast until a supported Copilot runner is wired
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain current limitation
+        shell: bash
+        run: |
+          {
+            echo "## Copilot Branch and PR"
+            echo
+            echo "This workflow is intentionally a guarded placeholder."
+            echo
+            echo "GitHub Copilot coding agent does not currently expose a stable repository workflow action or CLI surface in this codebase that can be wired with the same branch-and-PR automation contract as Codex, Claude, or Gemini."
+            echo
+            echo "Current request:"
+            echo "- Scope: ${{ github.event.inputs.scope }}"
+            echo "- Base branch: ${{ github.event.inputs.base_branch }}"
+            echo "- Task: ${{ github.event.inputs.task }}"
+            echo
+            echo "Keep OPS_AI_COPILOT_DISPATCH_ENABLED=false until a supported automation runner is available."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Copilot workflow dispatch is not implemented in GitHub Actions for this repository yet." >&2
+          exit 1

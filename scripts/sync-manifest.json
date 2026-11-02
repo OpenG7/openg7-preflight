@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "description": "Socle commun seulement. AGENTS.md est modifié entre ses marqueurs; mission, architecture, références, skills et workflows applicatifs restent locaux.",
+  "files": [
+    "docs/standards/agent-common.md",
+    "docs/standards/README.md",
+    "scripts/check-project-standards.mjs",
+    ".github/workflows/agent-standards.yml"
+  ]
+}
