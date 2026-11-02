@@ -1,5 +1,7 @@
 # OpenG7 Preflight
 
+![Centre de commandement OpenG7 Preflight](docs/Centre%20de%20Commandement%20OpenG7%20Preflight.png)
+
 > « C'est la plateforme qui doit avoir préparé mon travail avant mon arrivée. »
 
 Preflight est le système transverse de préparation du travail de l’écosystème
