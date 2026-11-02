@@ -1,0 +1,46 @@
+<section class="page-heading"><div><div class="eyebrow">{{supervision() ? 'SUPERVISION OPÉRATIONNELLE' : 'PRÉPARATIONS PERSISTÉES'}}</div><h1>{{supervision() ? 'Traitements & reprises' : 'Missions'}}<span class="gold">.</span></h1><p>{{supervision() ? 'Comprendre un blocage et intervenir avec les droits appropriés.' : 'Du besoin reçu au travail prêt à examiner.'}}</p></div><span class="count-pill large-pill">{{data()?.total ?? 0}} dossiers</span></section>
+<form class="filters" (ngSubmit)="load(true)" aria-label="Rechercher des missions">
+  <label class="search-field">Recherche<input name="q" [(ngModel)]="q" placeholder="Identifiant ou objet source"></label>
+  <label>Application<input name="application" [(ngModel)]="application" placeholder="Toutes les applications"></label>
+  <label>État<select name="status" [(ngModel)]="status"><option value="">Tous les états</option>@for (value of statuses; track value) { <option [value]="value">{{label(value)}}</option> }</select></label>
+  <button type="submit" class="button">Rechercher</button>
+</form>
+@if (error()) { <div class="alert error" role="alert">{{error()}} <button type="button" (click)="load()">Réessayer</button></div> }
+@if (loading()) { <p class="loading" role="status">Chargement des missions…</p> }
+<section class="panel table-panel" [attr.aria-busy]="loading()">
+  @if (data()?.items?.length) {
+    <div class="table-scroll"><table><caption class="sr-only">Missions, source, workflow, priorité et progression</caption><thead><tr><th scope="col">Mission / objet</th><th scope="col">Application source</th><th scope="col">Workflow</th><th scope="col">Priorité</th><th scope="col">État</th><th scope="col">Mise à jour</th></tr></thead><tbody>
+      @for (mission of data()?.items; track mission.id) { <tr [class.selected]="detail()?.mission?.id === mission.id"><td><button type="button" class="text-button mission-button" (click)="select(mission)">{{mission.source.subjectId}}</button><span class="cell-secondary mono">{{mission.id}}</span></td><td>{{mission.source.application}}<span class="cell-secondary">Version source {{mission.source.version}}</span></td><td class="workflow-cell">{{mission.workflow.type}}<span class="cell-secondary">v{{mission.workflow.version}}</span></td><td><span class="priority" [class.high]="mission.priority === 'high' || mission.priority === 'urgent'">{{mission.priority}}</span></td><td><span class="status" [attr.data-status]="mission.status">{{label(mission.status)}}</span></td><td>{{mission.updatedAt | date:'dd/MM/yyyy HH:mm'}}</td></tr> }
+    </tbody></table></div>
+  } @else if (!loading()) { <div class="empty-state large"><span aria-hidden="true">▤</span><h2>Aucune mission ne correspond</h2><p>Modifiez les filtres ou soumettez une mission depuis une application autorisée.</p></div> }
+  <div class="pagination"><span>Page {{page}} · {{data()?.total ?? 0}} résultats</span><div><button type="button" class="button secondary compact" (click)="navigate(-1)" [disabled]="page <= 1 || loading()">← Précédente</button><button type="button" class="button secondary compact" (click)="navigate(1)" [disabled]="page * pageSize >= (data()?.total ?? 0) || loading()">Suivante →</button></div></div>
+</section>
+@if (detailLoading()) { <p class="loading" role="status">Chargement du dossier et de ses résultats…</p> }
+@if (detailError()) { <p class="alert error" role="alert">{{detailError()}}</p> }
+@if (detail(); as dossier) {
+  <section class="panel detail-panel" aria-labelledby="detail-heading">
+    <div class="panel-heading"><div><div class="eyebrow">DOSSIER · {{dossier.mission.source.application}}</div><h2 id="detail-heading">{{dossier.mission.source.subjectId}}</h2></div><button type="button" class="icon-button" aria-label="Fermer le dossier" (click)="detail.set(null)">×</button></div>
+    <div class="detail-meta"><span class="status" [attr.data-status]="dossier.mission.status">{{label(dossier.mission.status)}}</span><span>Version source {{dossier.mission.source.version}}</span><span class="mono">{{dossier.mission.id}}</span></div>
+    @if (api.canOperate()) {
+      <div class="detail-actions">
+        @if (dossier.mission.status === 'failed') { <button type="button" class="button secondary" (click)="action('retry')" [disabled]="busy()">Reprendre la mission</button> }
+        @if (canCancel(dossier.mission.status)) { <button type="button" class="button danger" (click)="action('cancel')" [disabled]="busy()">Annuler la préparation</button> }
+      </div>
+      @if (dossier.mission.status === 'waiting_input') { <div class="input-panel"><label for="resume-input">Informations nécessaires à la reprise (JSON)</label><textarea id="resume-input" rows="5" [(ngModel)]="inputJson" spellcheck="false"></textarea><button type="button" class="button" (click)="action('input')" [disabled]="busy()">Transmettre et reprendre</button></div> }
+    }
+    <h3>Plan de tâches</h3>
+    @if (dossier.tasks.length) { <div class="task-list">@for (task of dossier.tasks; track task.id) { <article class="task-row"><div><strong>{{task.key || task.type || task.id}}</strong><span class="cell-secondary">{{task.attempts}} / {{task.maxAttempts}} tentative(s) · {{task.dependencies?.length ?? 0}} dépendance(s)</span>@if (task.errorCode || task.error) { <pre class="error-detail">{{task.errorCode || json(task.error)}}</pre> }</div><span class="status" [attr.data-status]="task.status">{{label(task.status)}}</span></article> }</div> } @else { <p class="muted">Aucune tâche planifiée pour le moment.</p> }
+    <h3>Résultats & provenance</h3>
+    @for (result of orderedResults(dossier.results); track result.id) {
+      <article class="result-card" [class.obsolete]="result.obsolete"><div class="result-header"><strong>{{resultTitle(result.kind || result.type)}}</strong><div class="inline-actions">@if (result.provenance?.['simulated']) { <span class="tag warning-tag">Simulation déterministe</span> }@if (result.obsolete) { <span class="tag">Obsolète · inutilisable</span> }</div></div>
+        @if (result.kind === 'draft') {
+          <div class="draft-content"><h3>{{outputText(result, 'title')}}</h3><p class="draft-summary">{{outputText(result, 'summary')}}</p><div class="draft-body">{{outputText(result, 'body')}}</div>@if (outputWarnings(result).length) { <div class="draft-warnings"><strong>Limites à prendre en compte</strong><ul>@for (warning of outputWarnings(result); track $index) { <li>{{warning}}</li> }</ul></div> }</div>
+        } @else { <details><summary>Consulter le contrôle effectué</summary><pre class="result-output">{{json(result.output ?? result.content)}}</pre></details> }
+        <details><summary>Provenance du résultat</summary><pre>{{json(result.provenance)}}</pre></details>
+      </article>
+    } @empty { <p class="muted">Les résultats vérifiés seront conservés ici après traitement.</p> }
+    <h3>Propositions préparées</h3>
+    @for (proposal of dossier.proposals; track proposal.id) { <article class="result-card"><strong>{{proposal.type}} · {{proposal.status}}</strong><p class="muted small">Cette proposition ne vaut aucune approbation métier.</p><details><summary>Voir les contrôles et la recommandation</summary><pre>{{json(proposal)}}</pre></details></article> } @empty { <p class="muted">Aucune proposition produite.</p> }
+    <details class="audit-details"><summary>Historique auditable ({{dossier.history.length}} événements)</summary><pre>{{json(dossier.history)}}</pre></details>
+  </section>
+}

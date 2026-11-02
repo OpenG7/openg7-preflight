@@ -1,0 +1,31 @@
+<section class="page-heading"><div><div class="eyebrow">PRÉPARATION DES DÉCISIONS</div><h1>Propositions & lots<span class="gold">.</span></h1><p>Examiner les éléments préparés, regrouper les dossiers admissibles, préserver chaque exception.</p></div><span class="tag gold-tag">Autorité de l’application source</span></section>
+<div class="authority-note"><span aria-hidden="true">◎</span><p>Cette console prépare la revue. Elle ne permet aucune approbation commerciale, publication ni décision financière.</p></div>
+@if (error()) { <div class="alert error" role="alert">{{error()}} <button type="button" (click)="load()">Actualiser</button></div> }
+@if (info()) { <p class="alert success" role="status">{{info()}}</p> }
+@if (loading()) { <p class="loading" role="status">Chargement des propositions et des lots…</p> }
+<section class="panel">
+  <div class="panel-heading"><div><div class="eyebrow">DOSSIERS IDENTIFIABLES</div><h2>Propositions préparées <span class="count-inline">{{total()}}</span></h2></div>@if (api.canOperate()) { <button type="button" class="button" [disabled]="selected().size === 0 || busy()" (click)="createBatch()">Préparer un lot · {{selected().size}}</button> }</div>
+  <p class="panel-description">Les dossiers d’un lot doivent partager les mêmes critères de revue. Le serveur vérifie l’homogénéité, les versions et les exceptions.</p>
+  @for (proposal of proposals(); track proposal.id) {
+    <article class="proposal-card" [class.sensitive]="proposal['risk'] === 'exception'">
+      <div class="proposal-selection">
+        @if (api.canOperate()) { <input type="checkbox" [id]="'proposal-' + proposal.id" [checked]="selected().has(proposal.id)" [disabled]="!isReady(proposal) || busy()" (change)="toggle(proposal.id)" [attr.aria-label]="'Sélectionner la proposition ' + proposal.id"> }
+        <div class="proposal-body"><div class="proposal-title"><h3>{{proposal.source?.subjectId || proposal.missionId}}</h3><span class="tag" [class.gold-tag]="isReady(proposal)">{{proposal.status === 'prepared' ? 'Préparée' : 'Obsolète'}}</span>@if (proposal['risk'] === 'exception') { <span class="tag warning-tag">Exception · jugement humain</span> }</div><p class="muted">{{proposal.source?.application}} · version source {{proposal.source?.version}} · {{proposal.type}}</p><p>{{explanations(proposal)}}</p><details><summary>Contrôles, anomalies et conditions de confirmation</summary><dl class="proposal-facts"><dt>Contrôles</dt><dd><pre>{{json(proposal['checks'])}}</pre></dd><dt>Anomalies</dt><dd><pre>{{json(proposal.anomalies)}}</pre></dd><dt>Conditions bloquantes</dt><dd><pre>{{json(proposal['blockingConditions'])}}</pre></dd><dt>Provenance</dt><dd><pre>{{json(proposal['provenance'])}}</pre></dd></dl></details><span class="cell-secondary mono">{{proposal.id}}</span></div>
+      </div>
+    </article>
+  } @empty { @if (!loading()) { <div class="empty-state"><span aria-hidden="true">◇</span><h3>Aucune proposition à examiner</h3><p>Les workers produisent des propositions à partir des résultats contrôlés, sans approuver les décisions.</p></div> } }
+  <div class="pagination"><span>Page {{page}}</span><div><button type="button" class="button secondary compact" [disabled]="page <= 1 || loading()" (click)="navigate(-1)">← Précédente</button><button type="button" class="button secondary compact" [disabled]="page * pageSize >= total() || loading()" (click)="navigate(1)">Suivante →</button></div></div>
+</section>
+<section class="panel section-gap">
+  <div class="panel-heading"><div><div class="eyebrow">REVUE COLLECTIVE</div><h2>Lots préparés</h2></div><span class="count-pill">{{batches().length}}</span></div>
+  @for (item of batches(); track item.id) { <button type="button" class="record-row" (click)="openBatch(item)"><span class="record-symbol" aria-hidden="true">▦</span><span class="record-content"><strong>Lot {{item.id}}</strong><span>Version {{item.version}} · {{item.createdAt | date:'dd/MM/yyyy HH:mm'}}</span></span><span aria-hidden="true">→</span></button> } @empty { <div class="empty-state"><h3>Préparez votre premier regroupement</h3><p>Sélectionnez des propositions compatibles. Chaque dossier peut ensuite être exclu et la sélection reste versionnée.</p></div> }
+</section>
+@if (batch(); as current) {
+  <section class="panel section-gap">
+    <div class="panel-heading"><div><div class="eyebrow">SÉLECTION VERSIONNÉE · V{{current.version}}</div><h2>Lot {{current.id}}</h2></div><div class="inline-actions">@if (api.canOperate()) { <button type="button" class="button secondary" (click)="exportBatch()" [disabled]="busy() || containsBlocked(current)">Exporter pour transmission</button> }<button type="button" class="icon-button" (click)="batch.set(null)" aria-label="Fermer le lot">×</button></div></div>
+    @if (containsBlocked(current)) { <p class="alert error" role="alert">Un dossier est devenu obsolète. Excluez-le ou préparez une nouvelle sélection avant la transmission.</p> }
+    <details open><summary>Critères explicites de regroupement</summary><pre>{{json(current.criteria)}}</pre></details>
+    @for (item of current.items; track $index) { <div class="batch-item"><div><strong>{{item['proposalId']}}</strong><span class="cell-secondary">{{item['excluded'] ? 'Exclu de la sélection' : item['blocked'] ? 'Obsolète · export bloqué' : 'Inclus · version vérifiée au moment de l’export'}}</span></div>@if (api.canOperate() && !item['excluded']) { <button type="button" class="button secondary compact" (click)="exclude(item)" [disabled]="busy()">Exclure ce dossier</button> }</div> }
+    <p class="muted small">L’application responsable doit revérifier les autorisations, le statut et la version de chaque objet avant toute décision.</p>
+  </section>
+}

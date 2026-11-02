@@ -11,6 +11,7 @@ import { planSync } from '../sync-openg7-standards.mjs';
 const template = fileURLToPath(new URL('../../', import.meta.url));
 const common = fs
   .readFileSync(path.join(template, 'docs/standards/agent-common.md'), 'utf8')
+  .replace(/\r\n/g, '\n')
   .trim();
 const sync = path.join(template, 'scripts/sync-openg7-standards.mjs');
 const managed = JSON.parse(

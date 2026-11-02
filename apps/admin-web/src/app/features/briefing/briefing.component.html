@@ -1,0 +1,53 @@
+<section class="page-heading">
+  <div><div class="eyebrow"><span class="pulse-dot" aria-hidden="true"></span> PRÉPARATION OPÉRATIONNELLE</div><h1>Votre briefing de relève<span class="gold">.</span></h1><p>Ce que le système a préparé. Ce qui attend votre jugement.</p></div>
+  <button type="button" class="button secondary" (click)="checkpoint()" [disabled]="loading()">Marquer comme consulté <span aria-hidden="true">✓</span></button>
+</section>
+<form class="filters" (ngSubmit)="load()" aria-label="Filtrer le briefing">
+  <label>Application<input name="application" [(ngModel)]="application" placeholder="Toutes les applications"></label>
+  <label>Statut<select name="status" [(ngModel)]="status"><option value="">Tous les statuts</option><option value="review_ready">Prête pour examen</option><option value="running">En cours</option><option value="waiting_input">Information manquante</option><option value="failed">Échec</option></select></label>
+  <label>Depuis<input type="datetime-local" name="since" [(ngModel)]="since"></label>
+  <button class="button secondary" type="submit">Appliquer</button>
+</form>
+@if (error()) { <div class="alert error" role="alert">{{error()}} <button type="button" (click)="load()">Réessayer</button></div> }
+@if (loading()) { <p class="loading" role="status">Chargement du travail préparé…</p> }
+@if (data(); as briefing) {
+  <div class="section-meta"><span>ÉTAT ACTUEL PERSISTÉ</span><span>{{fromBeginning(briefing.since) ? 'Depuis le démarrage' : ('Changements depuis le ' + (briefing.since | date:'dd/MM/yyyy HH:mm'))}}</span></div>
+  <section class="metric-grid" aria-label="Indicateurs du briefing">
+    <article class="metric-card cyan"><span class="metric-icon" aria-hidden="true">◈</span><span class="metric-label">Missions suivies</span><strong>{{count('total')}}</strong><span class="metric-foot">{{briefing.countsSince?.received ?? 0}} nouvelles sur la période observée</span></article>
+    <article class="metric-card gold-accent"><span class="metric-icon" aria-hidden="true">◇</span><span class="metric-label">Propositions prêtes</span><strong>{{count('proposalsReady')}}</strong><span class="metric-foot">à examiner dans l’application métier</span></article>
+    <article class="metric-card"><span class="metric-icon" aria-hidden="true">≋</span><span class="metric-label">En préparation</span><strong>{{count('running') + count('planning') + count('ready') + count('received')}}</strong><span class="metric-foot">traitements confiés aux workers</span></article>
+    <article class="metric-card amber"><span class="metric-icon" aria-hidden="true">!</span><span class="metric-label">À débloquer</span><strong>{{count('waiting_input') + count('waiting_dependency') + count('failed')}}</strong><span class="metric-foot">informations ou intervention requises</span></article>
+  </section>
+  <div class="briefing-grid">
+    <section class="panel ready-panel">
+      <div class="panel-heading"><div><div class="eyebrow">VOTRE PROCHAINE DÉCISION</div><h2>Prêt pour votre examen</h2></div><span class="count-pill">{{briefing.proposals?.length ?? 0}}</span></div>
+      @if (briefing.proposals?.length) {
+        <div class="record-list">
+          @for (proposal of briefing.proposals; track proposal.id) {
+            <button type="button" class="record-row" (click)="openReviews.emit()"><span class="record-symbol gold-text" aria-hidden="true">◇</span><span class="record-content"><strong>{{proposal.source?.subjectId || proposal.missionId}}</strong><span>{{proposal.source?.application || 'Proposition préparée'}} · {{proposal.type || 'Examen'}}</span></span><span class="tag gold-tag">Proposée</span><span aria-hidden="true">↗</span></button>
+          }
+        </div>
+      } @else { <div class="empty-state"><span aria-hidden="true">◇</span><h3>Aucune proposition prête</h3><p>Les propositions apparaîtront après le traitement et les contrôles des missions.</p></div> }
+      <button type="button" class="panel-link" (click)="openReviews.emit()">Examiner les propositions et préparer des lots <span aria-hidden="true">→</span></button>
+    </section>
+    <section class="panel">
+      <div class="panel-heading"><div><div class="eyebrow">ATTENTION HUMAINE</div><h2>Exceptions & blocages</h2></div><span class="count-pill">{{briefing.blocked?.length ?? 0}}</span></div>
+      @if (briefing.blocked?.length) {
+        <div class="record-list">@for (mission of briefing.blocked; track mission.id) { <button type="button" class="record-row" (click)="openMissions.emit()"><span class="record-symbol amber-text" aria-hidden="true">!</span><span class="record-content"><strong>{{mission.source.subjectId}}</strong><span>{{mission.source.application}}</span></span><span class="status" [attr.data-status]="mission.status">{{label(mission.status)}}</span></button> }</div>
+      } @else { <div class="empty-state"><span class="cyan-text" aria-hidden="true">✓</span><h3>Aucun blocage signalé</h3><p>Les missions qui nécessitent une intervention seront présentées ici.</p></div> }
+    </section>
+    <section class="panel">
+      <div class="panel-heading"><div><div class="eyebrow">TRAVAIL DU SYSTÈME</div><h2>Missions prioritaires</h2></div><button type="button" class="text-button" (click)="openMissions.emit()">Toutes les missions →</button></div>
+      @if (briefing.missions?.length) {
+        <div class="record-list">@for (mission of briefing.missions; track mission.id) { <button type="button" class="record-row" (click)="openMissions.emit()"><span class="record-symbol" aria-hidden="true">▤</span><span class="record-content"><strong>{{mission.source.subjectId}}</strong><span>{{mission.source.application}} · {{mission.workflow.type}}</span></span><span class="status" [attr.data-status]="mission.status">{{label(mission.status)}}</span></button> }</div>
+      } @else { <div class="empty-state"><h3>Le briefing commence avec une mission</h3><p>Soumettez une mission via l’API ou le script de démonstration. Les résultats affichés proviendront de PostgreSQL.</p></div> }
+    </section>
+    <section class="panel activity-panel">
+      <div class="panel-heading"><div><div class="eyebrow">TRAÇABILITÉ</div><h2>Activité récente</h2></div><span class="activity-light" aria-hidden="true"></span></div>
+      @if (briefing.recentActivity?.length) {
+        <ol class="activity-list" aria-label="Dix derniers événements de préparation">@for (activity of recentActivities(briefing.recentActivity); track $index) { <li><span class="activity-point" aria-hidden="true"></span><div><strong>{{activityText(activity)}}</strong><span>{{activityMission(activity)}}</span><time>{{activityTime(activity) | date:'dd/MM HH:mm:ss'}}</time></div></li> }</ol>
+      } @else { <div class="empty-state"><h3>Aucune activité sur cette période</h3><p>Le journal se remplit à chaque transition et intervention tracée.</p></div> }
+    </section>
+  </div>
+  <div class="authority-note"><span aria-hidden="true">◎</span><p>Une proposition prête n’est pas une décision approuvée. L’application source conserve l’autorité métier.</p></div>
+}
