@@ -28,7 +28,11 @@ export class ApiService {
     if (error instanceof HttpErrorResponse) {
       if (error.status === 0) return 'L’API est injoignable. Vérifiez son démarrage et la connexion.';
       if (error.status === 401) return 'Session requise ou expirée. Connectez-vous avec un jeton valide.';
-      if (error.status === 403) return 'Votre rôle ne permet pas cette opération.';
+      if (error.status === 403) {
+        if(error.error?.error==='mfa_required')return 'Une connexion avec authentification multifacteur est requise. Reconnectez-vous avec OpenG7 pour vérifier votre identité.';
+        if(error.error?.error==='password_required')return 'Une connexion par mot de passe est requise. Reconnectez-vous avec OpenG7 pour vérifier votre identité.';
+        return 'Votre rôle ne permet pas cette opération.';
+      }
       if (error.status === 429) return 'Trop de requêtes. Patientez avant de recommencer.';
       const body = error.error as {message?: string; error?: string} | null;
       const messages: Record<string, string> = {

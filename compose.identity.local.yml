@@ -1,0 +1,114 @@
+# Local Docker stack using the existing Funding Keycloak realm.
+# Combine with docker-compose.yml and select only --profile identity-local.
+x-local-server: &local-server
+  image: ${PREFLIGHT_LOCAL_SERVER_IMAGE:-openg7-preflight:local-sso}
+  build:
+    context: .
+    dockerfile: Dockerfile
+  profiles: [identity-local]
+  init: true
+  read_only: true
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  stop_grace_period: 45s
+  networks: [default]
+
+services:
+  preflight-migrate:
+    <<: *local-server
+    command: ["node", "dist/scripts/migrate.js"]
+    restart: "no"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://preflight:preflight_local@postgres:5432/preflight
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  preflight-api:
+    <<: *local-server
+    command: ["node", "dist/apps/api/src/main.js"]
+    restart: unless-stopped
+    networks: [default, local-identity-gateway]
+    secrets: [preflight-local-ca]
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: 3000
+      AUTH_MODE: jwt
+      # Explicit localhost-only password profile; production still requires MFA.
+      OIDC_REQUIRE_MFA: "false"
+      OIDC_REQUIRE_PASSWORD: "true"
+      DATABASE_URL: postgresql://preflight:preflight_local@postgres:5432/preflight
+      OIDC_ISSUER: ${PREFLIGHT_LOCAL_OIDC_ISSUER:-https://auth.openg7.test/realms/openg7}
+      OIDC_AUDIENCE: ${PREFLIGHT_LOCAL_OIDC_AUDIENCE:-preflight-api}
+      OIDC_JWKS_URL: ${PREFLIGHT_LOCAL_OIDC_JWKS_URL:-https://auth.openg7.test/realms/openg7/protocol/openid-connect/certs}
+      OIDC_BROWSER_CLIENT_ID: ${PREFLIGHT_LOCAL_OIDC_CLIENT_ID:-preflight-console}
+      OIDC_BROWSER_REDIRECT_URI: ${PREFLIGHT_LOCAL_OIDC_REDIRECT_URI:-https://localhost:8444/}
+      NODE_EXTRA_CA_CERTS: /run/secrets/preflight-local-ca
+    depends_on:
+      preflight-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  preflight-worker:
+    <<: *local-server
+    command: ["node", "dist/apps/worker/src/main.js"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://preflight:preflight_local@postgres:5432/preflight
+      AI_PROVIDER: mock
+      WORKER_CONCURRENCY: 4
+      WORKER_HEARTBEAT_FILE: /tmp/preflight-local-worker-heartbeat.json
+    depends_on:
+      preflight-migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "node", "/app/infrastructure/production/worker-health.mjs"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  preflight-web:
+    image: ${PREFLIGHT_LOCAL_WEB_IMAGE:-openg7-preflight-web:local-sso}
+    build:
+      context: .
+      dockerfile: infrastructure/production/Dockerfile.web
+    profiles: [identity-local]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [default]
+    ports: ["127.0.0.1:${PREFLIGHT_LOCAL_WEB_PORT:-8444}:8443"]
+    volumes:
+      - ./infrastructure/identity/nginx.local.conf:/etc/nginx/nginx.conf:ro
+    secrets: [preflight-local-cert, preflight-local-key]
+    depends_on:
+      preflight-api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+networks:
+  local-identity-gateway:
+    external: true
+    name: ${PREFLIGHT_LOCAL_IDENTITY_NETWORK:-openg7-edge}
+
+secrets:
+  preflight-local-ca:
+    file: ${PREFLIGHT_LOCAL_CA_FILE:?Set the existing local public CA file}
+  preflight-local-cert:
+    file: ${PREFLIGHT_LOCAL_CERT_FILE:?Set the existing localhost certificate file}
+  preflight-local-key:
+    file: ${PREFLIGHT_LOCAL_KEY_FILE:?Set the existing localhost private key file}

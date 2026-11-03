@@ -53,6 +53,12 @@ Remplacer les valeurs `replace-with-*` et `example.invalid`.
 | Identité console | Client public OIDC, Authorization Code avec PKCE S256, URI de retour HTTPS et origines exactes autorisées |
 | Fournisseur | Clé en fichier secret, modèle compatible et tarifs explicitement vérifiés |
 
+Pour réutiliser le realm Keycloak de Funding, préparer les clients et habilitations
+avec le [guide du realm partagé](shared-realm-sso.md). Le contrôle API de production
+exige une preuve `amr` contenant `mfa` pour les rôles humains, y compris après une
+réutilisation SSO; un jeton portant uniquement `service_integration` suit le parcours
+technique distinct. Les droits Funding ne deviennent jamais des droits Preflight.
+
 Forme du contenu du fichier d’URL (valeur illustrative à remplacer, jamais à
 enregistrer dans Git) :
 

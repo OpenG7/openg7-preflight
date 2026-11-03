@@ -13,6 +13,8 @@ export interface ApiConfig {
   devWebOrigin?: string;
   oidcBrowserClientId?: string; oidcBrowserRedirectUri?: string;
   oidcIssuer?: string; oidcAudience?: string; oidcJwksUrl?: string;
+  oidcRequireMfa?: boolean;
+  oidcRequirePassword?: boolean;
   rateLimit: number;
 }
 const nonempty = z.string().trim().min(1).max(128);
@@ -26,6 +28,7 @@ export function developmentWebOrigin(config: Pick<ApiConfig, 'devWebOrigin'>): s
 const claimsSchema = z.object({
   sub: nonempty, tenant_id: nonempty, applications: z.array(nonempty).min(1).max(100),
   realm_access: z.object({ roles: z.array(z.string()).max(100) }),
+  amr: z.array(nonempty).max(100).optional(),
 });
 
 export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -38,6 +41,10 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const oidcIssuer = env['OIDC_ISSUER'];
   const oidcAudience = env['OIDC_AUDIENCE'];
   const oidcJwksUrl = env['OIDC_JWKS_URL'] ?? env['JWKS_URL'];
+  const mfaSetting = z.enum(['true', 'false']).optional().parse(env['OIDC_REQUIRE_MFA']);
+  if (environment === 'production' && mfaSetting === 'false') throw new HttpError(500, 'production_mfa_required');
+  const oidcRequireMfa = environment === 'production' || mfaSetting === 'true';
+  const oidcRequirePassword = z.enum(['true', 'false']).optional().parse(env['OIDC_REQUIRE_PASSWORD']) === 'true';
   const oidcBrowserClientId=env['OIDC_BROWSER_CLIENT_ID'];
   const oidcBrowserRedirectUri=env['OIDC_BROWSER_REDIRECT_URI'];
   if(Boolean(oidcBrowserClientId)!==Boolean(oidcBrowserRedirectUri))throw new HttpError(500,'oidc_browser_configuration_required');
@@ -65,7 +72,7 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   if (environment === 'production' && (db.searchParams.get('sslmode') !== 'verify-full' || !password || ['preflight_local', 'password', 'postgres'].includes(password)))
     throw new HttpError(500, 'production_database_tls_required');
   return {
-    environment, host, authMode, databaseUrl, devWebOrigin,
+    environment, host, authMode, databaseUrl, devWebOrigin, oidcRequireMfa, oidcRequirePassword,
     port: z.coerce.number().int().min(1).max(65535).parse(env['PORT'] ?? '3000'),
     devTenantId: nonempty.parse(env['DEV_TENANT_ID'] ?? 'openg7-demo'), devSubject: nonempty.parse(env['DEV_SUBJECT'] ?? 'local-administrator'),
     devApplications: z.array(nonempty).min(1).max(100).parse((env['DEV_APPLICATIONS'] ?? 'funding-platform,openg7-social').split(',').map(value => value.trim()).filter(Boolean)),
@@ -100,8 +107,18 @@ export function createAuthenticator(config: ApiConfig, testKey?: JWTVerifyGetKey
       const claims = claimsSchema.parse(verified.payload);
       const allowed = claims.realm_access.roles.filter((role): role is Role => (roles as readonly string[]).includes(role));
       if (!allowed.length) throw new Error('no_roles');
+      // Machine identities have their own role. Adding a human role must never
+      // turn this exception into an MFA bypass for interactive permissions.
+      const machineOnly = allowed.every(role => role === 'service_integration');
+      if ((config.environment === 'production' || config.oidcRequireMfa) && !machineOnly && !claims.amr?.includes('mfa'))
+        throw new HttpError(403, 'mfa_required');
+      if (config.oidcRequirePassword && !machineOnly && !claims.amr?.includes('pwd'))
+        throw new HttpError(403, 'password_required');
       return { tenantId: claims.tenant_id, subject: claims.sub, applications: claims.applications, roles: allowed, correlationId: request.id };
-    } catch { throw new HttpError(401, 'invalid_access_token'); }
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      throw new HttpError(401, 'invalid_access_token');
+    }
   };
 }
 
