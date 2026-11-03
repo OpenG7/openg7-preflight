@@ -31,8 +31,12 @@ Claims JWT signés requis (exemple synthétique, pas un jeton utilisable) :
 
 RS256 et ES256 sont acceptés. Les claims tenant_id et applications nécessitent
 des mappers contrôlés dans l’identité réelle. Aucun en-tête client ne remplace
-ces permissions signées. Keycloak/PKCE et les webhooks signés restent à raccorder.
-La console conserve le JWT saisi en mémoire seulement, jusqu’au rechargement.
+ces permissions signées. Le parcours console PKCE est livré; le realm Keycloak
+réel et les webhooks signés restent à qualifier. Configurer ensemble
+OIDC_BROWSER_CLIENT_ID et OIDC_BROWSER_REDIRECT_URI avec un client public, S256
+et une URI/origine exactes. Le point public /api/auth/config ne retourne que ces
+paramètres publics. Les jetons restent en mémoire, jusqu’au rechargement ou à
+la déconnexion locale; les sessions de l’issuer ne sont pas révoquées par celle-ci.
 
 La production exige HTTPS pour issuer/JWKS et sslmode=verify-full pour PostgreSQL,
 avec des identifiants non démonstratifs. Pour un transport sortant, implémenter
@@ -43,13 +47,15 @@ Sources inspectées : [inventaire](architecture/ecosystem-integration.md).
 
 ## Raccordement de Funding Platform
 
-**État actuel :** les endpoints Preflight, le workflow Funding et les tests de
-préparation existent. Le connecteur Funding, l’identité de service réelle et
-l’import des propositions dans Funding ne sont pas livrés. Les démonstrations
-actuelles soumettent des données synthétiques.
+**État actuel :** le connecteur est implémenté dans le dépôt Funding, dans un
+module et un relais indépendants du moteur Preflight. Une recette locale teste
+l’activation Funding, OAuth/JWKS signé, l’API et le worker Preflight, puis l’import
+de propositions privées dans Funding. Le panneau administratif Funding les
+présente en lecture seule. Les identités de service et connexions de production
+restent à configurer et qualifier; l’IA de recette est explicitement simulée.
 
-Le parcours ci-dessous est la cible du premier raccordement, par API HTTPS
-authentifiée. Il ne définit aucune route supposée exister dans Funding.
+Le parcours utilise les contrats API v1. Les notifications de décision à la fin
+restent à brancher aux actions métier Funding; aucune route Funding n’est inventée.
 
 ```mermaid
 sequenceDiagram
@@ -57,7 +63,7 @@ sequenceDiagram
   participant P as API Preflight
   participant W as Worker Preflight
   participant H as Personne autorisée
-  Note over F,P: Connecteur Funding à implémenter
+  Note over F,P: Connecteur testé localement; identité réelle à qualifier
   F->>F: Valider le changement métier et conserver sa livraison
   F->>P: POST /api/events : mission.submitted
   P-->>F: 202 + missionId, ou doublon 200
@@ -74,14 +80,15 @@ sequenceDiagram
 
 | Étape | Port Preflight existant | Travail côté raccordement |
 | --- | --- | --- |
-| Authentifier Funding | JWT vérifié, rôle service_integration, tenant et applications | Configurer l’identité; utiliser applications=[funding-platform] et le tenant autorisé |
-| Confier une préparation | POST /api/events avec mission.submitted, ou POST /api/missions | Produire la mission versionnée et conserver eventId/missionId pour la reprise |
-| Préparer le brouillon | sponsorship-preparation-v1, version1.0 | Fournir title, description et benefits depuis un snapshot validé par Funding |
-| Consulter la préparation | GET /api/missions/:id et GET /api/proposals?application=funding-platform&status=prepared | Implémenter la lecture et l’import; le détail de mission fournit les résultats référencés par la proposition |
+| Authentifier Funding | JWT vérifié, rôle service_integration, tenant et applications | Client credentials livré; provisionner l’identité réelle et ses claims limités à funding-platform |
+| Confier une préparation | POST /api/events avec mission.submitted, ou POST /api/missions | Outbox transactionnelle et relais livrés; activation désactivée par défaut |
+| Préparer le brouillon | sponsorship-preparation-v1, version1.0 | title, description et benefits dérivés d’un snapshot minimisé dans Funding |
+| Consulter la préparation | GET /api/missions/:id et GET /api/proposals?application=funding-platform&status=prepared | Lecture, validation, import privé et panneau administratif livrés |
 | Préparer une revue collective | API review-batches, exclusion et export versionnés | Réutiliser la sélection dans Funding avec contrôle de chaque dossier et des droits de l’appelant |
-| Invalider un ancien travail | POST /api/events avec source.updated | Notifier la révision et soumettre au besoin une nouvelle mission; l’invalidation seule ne crée pas de nouvelle préparation |
+| Invalider un ancien travail | POST /api/events avec source.updated | Réconciliation des sources suivies livrée; chaque mutation ne possède pas encore son propre événement transactionnel |
 | Fournir une information manquante | POST /api/missions/:id/input | Compléter une mission en attente; toute évolution du snapshot source doit aussi respecter son versionnement |
 | Notifier une décision déjà prise | POST /api/missions/:id/source-decision | Envoyer sourceVersion, decision et eventId après validation et exécution autorisées dans Funding |
+| Annuler depuis la source | POST /api/missions/:id/cancel | Client livré; sourceVersion et eventId obligatoires pour le rôle service, branchement métier encore à définir |
 
 Le jeton technique reste dans le backend Funding. Preflight limite chaque accès
 au tenant et aux applications du jeton; les deux systèmes gardent leurs propres
@@ -105,10 +112,11 @@ une liaison Preflight déjà disponible.
 
 L’inspection de Funding montre des versions numériques d’engagement, mais aussi
 des empreintes et horodatages textuels pour certaines préparations/publications.
-Preflight exige actuellement source.version entier positif et croissant pour
-l’objet analysé. Le raccordement doit définir quel snapshot métier fait foi et
-comment lui associer cette révision; l’identité d’un engagement, une empreinte
-de préparation et une version de publication ne sont pas interchangeables.
+Preflight exige source.version entier positif et croissant pour l’objet analysé.
+Le connecteur utilise subjectType=sponsorship-commitment, l’identifiant de
+l’engagement et une révision monotone propre à son snapshot observé. L’empreinte
+sourceSnapshotDigest lie le contenu envoyé aux faits relus lors de l’import.
+Cette révision n’est ni le digest d’approbation ni une version de publication.
 
 Une modification de la source peut rendre une proposition obsolète après sa
 consultation ou son export. Funding doit donc revalider son snapshot courant au
@@ -124,11 +132,10 @@ qu’un changement Funding a effectivement été transmis. En cas de timeout, le
 connecteur pourra renvoyer la même mission avec le même eventId : une réception
 identique retourne le même missionId, un contenu différent provoque un conflit.
 
-Pour cette première liaison, Funding peut lire les propositions à travers les
-endpoints existants. Cette boucle de lecture et son suivi restent à construire;
-aucun webhook sortant ni implémentation de deliverProposal ne pousse actuellement
-les résultats vers Funding. Les signatures et garanties de tout futur transport
-sortant devront être définies avec l’application propriétaire.
+Le relais Funding consulte les missions et importe les propositions après
+revalidation des données courantes. Aucun webhook sortant ni implémentation de
+deliverProposal ne pousse les résultats depuis Preflight. Une telle extension
+devra définir ses signatures et garanties avec l’application propriétaire.
 
 La proposition rassemble les contrôles et le brouillon, pas une autorisation de
 publier. Funding conserve ses vérifications d’éligibilité, droits, consentements,

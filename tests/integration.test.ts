@@ -49,6 +49,19 @@ test('PostgreSQL durable engine: complete workflows, tenants, versions, batching
       assert.equal(concurrent.filter(result=>result.status==='fulfilled').length,1);
       assert.match(String((concurrent.find(result=>result.status==='rejected') as PromiseRejectedResult).reason),/idempotency_conflict/);
     });
+    await t.test('source service cancellation is versioned, scoped and idempotent',async()=>{
+      const mission=await service.submit(input(),scope);
+      const sourceScope:AccessContext={...scope,roles:['service_integration']};
+      await assert.rejects(()=>service.cancel(mission.mission.id,sourceScope),/source_version_required/);
+      await assert.rejects(()=>service.cancel(mission.mission.id,sourceScope,{sourceVersion:2,eventId:randomUUID()}),/stale_source_version/);
+      await assert.rejects(()=>service.cancel(mission.mission.id,{...sourceScope,tenantId:'other'},{sourceVersion:1,eventId:randomUUID()}),/mission_not_found/);
+      const eventId=randomUUID();
+      assert.equal((await service.cancel(mission.mission.id,sourceScope,{sourceVersion:1,eventId}))?.mission.status,'cancelled');
+      assert.equal((await service.cancel(mission.mission.id,sourceScope,{sourceVersion:1,eventId}))?.mission.status,'cancelled');
+      const second=await service.submit(input(),scope);
+      await assert.rejects(()=>service.cancel(second.mission.id,sourceScope,{sourceVersion:1,eventId}),/idempotency_conflict/);
+      assert.equal((await service.detail(second.mission.id,scope))?.mission.status,'ready');
+    });
     worker=await startWorker({pool,boss,provider:new MockAiProvider(),concurrency:4,pollIntervalSeconds:0.5,dispatchIntervalMs:50});
     let firstProposalId='',secondProposalId='',socialProposalId='',firstMissionId='';
     await t.test('two unrelated workflows use real PostgreSQL and the same worker, results and briefing',async()=>{

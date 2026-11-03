@@ -13,5 +13,6 @@ COPY apps/admin-web/package.json apps/admin-web/package.json
 RUN npm ci --omit=dev --workspaces=false
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
+COPY infrastructure/production ./infrastructure/production
 USER node
 CMD ["node", "dist/apps/api/src/main.js"]

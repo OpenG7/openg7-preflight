@@ -4,3 +4,4 @@ export { startWorker, processTask, dispatchOutbox, queueName, quarantineName } f
 export type { WorkerOptions } from './worker.js';
 export { workflows, registerWorkflow, resolveWorkflow, planWorkflow, validatePlan, missingInput, invalidInput, assertTransition, allowedTransitions } from './workflows.js';
 export type { WorkflowDefinition, TaskDefinition } from './workflows.js';
+export { startWorkerHeartbeat } from './heartbeat.js';

@@ -33,7 +33,8 @@
     }
     @if (authOpen()) {
       <section class="session-panel" aria-labelledby="session-heading">
-        <div><h2 id="session-heading">Accès à la console</h2><p>Jeton d’accès JWT conservé en mémoire uniquement. Le raccordement de connexion OpenG7 reste à configurer.</p></div>
+        <div><h2 id="session-heading">Accès à la console</h2><p>Connexion OpenG7 par code avec PKCE lorsque configurée. Les jetons d’accès restent en mémoire.</p></div>
+        @if (ssoAvailable()) { <button type="button" class="button" (click)="loginSso()" [disabled]="authBusy()">Se connecter avec OpenG7</button> }
         <form class="session-form" (ngSubmit)="login()">
           <label for="access-token">Jeton d’accès</label>
           <input id="access-token" name="token" type="password" [(ngModel)]="token" autocomplete="off" spellcheck="false" placeholder="JWT fourni par votre identité autorisée">

@@ -1,5 +1,8 @@
 # Vérifications de la première version
 
+Ce bilan décrit la version initiale. Les vérifications ultérieures du connecteur
+Funding, de PKCE et de la stack VPS sont dans [le bilan dédié](validation-funding-vps.md).
+
 Exécution locale du 2 novembre 2026. Windows/PowerShell, Node24.21.0,
 Docker29.6.1 et PostgreSQL17.9. Les vérifications Node22 ont également été
 exécutées dans l’image de construction Docker, sans fournisseur IA payant.

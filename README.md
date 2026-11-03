@@ -25,7 +25,9 @@ Le parcours est réel : **API → PostgreSQL → worker → résultats → propo
 Les missions, tâches, résultats intermédiaires, propositions, lots et historiques
 sont persistés. Le fournisseur par défaut est une **simulation déterministe**,
 identifiée dans chaque brouillon; aucune inférence réelle n’est prétendue.
-Funding, Social, Keycloak, le runtime et le model gateway ne sont pas raccordés.
+Le connecteur Funding est livré dans son dépôt et testé localement avec Preflight.
+Ses connexions de production, Social, Keycloak réel, le runtime et le model gateway
+ne sont pas qualifiés.
 
 ## Démarrage local
 
@@ -87,7 +89,9 @@ temporaires dans la base de test dédiée, jamais une base métier. Le Compose n
 crée `preflight` et `preflight_test`. Les tests unitaires restent utilisables sans
 PostgreSQL; les intégrations se lancent séparément avec test:integration.
 
-Pour les tests navigateur, avec PostgreSQL migré et les trois processus lancés :
+Les tests navigateur lancent une pile isolée sur les ports 4400/3400, avec la base
+TEST_DATABASE_URL locale, le mock et une identité de développement explicites.
+Ils conservent les serveurs utilisateur 4300/3000. PostgreSQL doit être disponible :
 
 ```sh
 npx playwright install chromium
@@ -99,6 +103,11 @@ Le build serveur est dans `dist/`; le build Angular dans `apps/admin-web/dist/ad
 Le Dockerfile compile le serveur sur Node 22; le profil Compose `full` exige une
 configuration JWT réelle (l’authentification locale est interdite sur `0.0.0.0`).
 Ce profil n’installe pas une identité ni une console de production.
+
+La stack dédiée [compose.production.yml](compose.production.yml) et l’overlay
+Traefik préparent le VPS : Angular statique, PostgreSQL TLS privé, secrets fichiers,
+migrations, santé et ressources bornées. Suivre le [guide VPS](docs/deployment-vps.md)
+avant toute livraison réelle; aucune cible de production n’a été déployée.
 
 Arrêter l’infrastructure locale sans effacer les données : `npm run infra:down`.
 
@@ -123,6 +132,8 @@ Arrêter l’infrastructure locale sans effacer les données : `npm run infra:do
 - [Ajouter un workflow](docs/adding-workflows.md) et [connecter une application](docs/connecting-applications.md).
 - [Diagnostic](docs/troubleshooting.md) et [état vérifié, compatibilité et limites](docs/architecture/operational-readiness.md).
 - [Travaux restants : VPS et raccordement Funding](docs/architecture/operational-readiness.md#travaux-restants).
+- [Vérifications du connecteur et de la stack VPS](docs/validation-funding-vps.md).
+- [Préparer le VPS](docs/deployment-vps.md).
 - [Consignes](AGENTS.md) et [standard commun OpenG7](docs/standards/README.md).
 
 L’adaptateur OpenAI est activable uniquement avec clé, modèle, tarifs et accord
@@ -136,5 +147,8 @@ uses a shared PostgreSQL-backed engine, an independent pg-boss worker, a Fastify
 API and an Angular console for two workflows. It persists drafts, provenance,
 review proposals, versioned batches and a real operational briefing. Demo sources
 and the default AI provider are explicitly simulated. External applications and
-centralized identity are not connected. Business authority remains with each
-source application. See the documentation above for setup, validation and limits.
+centralized identity are not qualified in production. The Funding connector is
+implemented and tested locally with the real Preflight engine; the console also
+supports configurable OIDC/PKCE. A production Compose stack is prepared, with no
+deployment performed. Business authority remains with each source application.
+See the documentation above for setup, validation and limits.

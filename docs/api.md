@@ -9,11 +9,12 @@ correlationId sans contenu interne. Les lectures sont privées et sans cache.
 | --- | --- |
 | GET /health/live | Processus vivant |
 | GET /health/ready | Dépendances de persistance prêtes |
+| GET /api/auth/config | Paramètres publics de connexion PKCE, sans authentification ni secret |
 | GET /api/session | Identité et portée effectives |
 | POST /api/missions | Mission v1 : 202 nouvelle, 200 doublon |
 | GET /api/missions | Liste : page, pageSize, q, status, application |
 | GET /api/missions/:id | Mission, tâches, résultats, propositions, historique |
-| POST /api/missions/:id/cancel | Annulation autorisée, corps vide |
+| POST /api/missions/:id/cancel | Opérateur/admin : objet vide; service source : sourceVersion et eventId requis |
 | POST /api/missions/:id/retry | Reprise autorisée, corps vide |
 | POST /api/missions/:id/input | Informations manquantes : `{ "input": {} }` |
 | POST /api/missions/:id/source-decision | Notification source : sourceVersion, decision, eventId |

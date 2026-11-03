@@ -13,7 +13,7 @@ function fixture() {
     list: async (scope: AccessContext, input: unknown) => { calls.push({ action: 'list', scope, input }); return { items: [], total: 0, page: 1, pageSize: 25 }; },
     submit: async (input: unknown, scope: AccessContext) => { calls.push({ action: 'submit', scope, input }); return { mission: { id: 'fixture' }, duplicate: false }; },
     detail: async () => null,
-    cancel: async (_id: string, scope: AccessContext) => { calls.push({ action: 'cancel', scope }); return { status: 'cancelled' }; },
+    cancel: async (_id: string, scope: AccessContext, input?:unknown) => { calls.push({ action: 'cancel', scope, input }); return { status: 'cancelled' }; },
   } as unknown as PreflightService;
   return { service, calls };
 }
@@ -26,11 +26,13 @@ test('development auth is impossible in production or on a network binding', () 
   assert.equal(loadApiConfig({ ...env, NODE_ENV: 'development', DEV_WEB_ORIGIN: 'http://127.0.0.1:4300' }).devWebOrigin, 'http://127.0.0.1:4300');
   assert.throws(() => loadApiConfig({ NODE_ENV: 'production', DATABASE_URL: base.databaseUrl }), /oidc_configuration_required/);
   const production = { NODE_ENV: 'production', AUTH_MODE: 'jwt', OIDC_ISSUER: 'https://identity.example.test/realms/example', OIDC_AUDIENCE: 'preflight-api', OIDC_JWKS_URL: 'https://identity.example.test/keys' };
+  assert.throws(()=>loadApiConfig({...production,DATABASE_URL:'postgres://synthetic:strong-synthetic-only@db.example.test/test?sslmode=verify-full',OIDC_ISSUER:'https://identity.example.test/?token=synthetic'}),/oidc_url_invalid/);
   for (const password of ['%70reflight_local', 'password', 'postgres', ''])
     assert.throws(() => loadApiConfig({ ...production, DATABASE_URL: `postgres://synthetic:${password}@database.example.test/preflight?sslmode=verify-full` }), /production_database_tls_required/);
 });
 test('API validates contracts, query bounds, unknown fields, no approval endpoint', async t => {
   const { service, calls } = fixture(); const app = await createApp({ service, config: base, health: async () => undefined }); t.after(() => app.close());
+  assert.deepEqual((await app.inject('/api/auth/config')).json(),{enabled:false});
   assert.equal((await app.inject('/health/live')).statusCode, 200);
   assert.equal((await app.inject('/health/ready')).statusCode, 200);
   const session = await app.inject('/api/session'); assert.equal(session.json().authMode, 'development');
@@ -40,6 +42,7 @@ test('API validates contracts, query bounds, unknown fields, no approval endpoin
   assert.equal(calls.length, 0);
   assert.equal((await app.inject('/api/missions/missing')).statusCode, 404);
   assert.equal((await app.inject({ method: 'POST', url: '/api/proposals/id/approve', payload: {} })).statusCode, 404);
+  for(const payload of [null,[],false,0])assert.equal((await app.inject({method:'POST',url:'/api/missions/id/cancel',headers:{'content-type':'application/json'},payload:JSON.stringify(payload)})).statusCode,400);
   assert.equal((await app.inject({ method: 'POST', url: '/api/review-batches', payload: { proposalIds: ['not-a-uuid'] } })).statusCode, 400);
   assert.equal((await app.inject('/api/review-batches/not-a-uuid')).statusCode, 400);
   const list = await app.inject('/api/missions?page=1&pageSize=10&q=example'); assert.equal(list.statusCode, 200);
@@ -66,6 +69,10 @@ test('verified JWT claims define tenant/application scope; viewer mutations forb
   assert.equal((await app.inject({ url: '/api/missions', headers: { authorization: `Bearer ${bearer}`, 'x-tenant-id': 'attacker' } })).statusCode, 200);
   assert.equal(calls[0]?.scope.tenantId, 'tenant-jwt'); assert.deepEqual(calls[0]?.scope.applications, ['funding-platform']);
   assert.equal((await app.inject({ method: 'POST', url: '/api/missions/id/cancel', headers: { authorization: `Bearer ${bearer}` }, payload: {} })).statusCode, 403);
+  const sourceBearer=await token({realm_access:{roles:['service_integration']}});
+  assert.equal((await app.inject({method:'POST',url:'/api/missions/id/cancel',headers:{authorization:`Bearer ${sourceBearer}`},payload:{}})).statusCode,400);
+  assert.equal((await app.inject({method:'POST',url:'/api/missions/id/cancel',headers:{authorization:`Bearer ${sourceBearer}`},payload:{sourceVersion:1,eventId:'source-cancel-1'}})).statusCode,200);
+  assert.deepEqual(calls.find(call=>call.action==='cancel')?.input,{sourceVersion:1,eventId:'source-cancel-1'});
   assert.equal((await app.inject({ url: '/api/missions', headers: { authorization: `Bearer ${await token({}, 'wrong-audience')}` } })).statusCode, 401);
   assert.equal((await app.inject({ url: '/api/missions', headers: { authorization: `Bearer ${await token({ applications: [] })}` } })).statusCode, 401);
   const wrongKeys = await generateKeyPair('RS256');
@@ -73,6 +80,17 @@ test('verified JWT claims define tenant/application scope; viewer mutations forb
   assert.equal((await app.inject({ url: '/api/missions', headers: { authorization: `Bearer ${forged}` } })).statusCode, 401);
   const expired = await new SignJWT({ tenant_id: 'tenant-jwt', applications: ['funding-platform'], realm_access: { roles: ['viewer'] } }).setProtectedHeader({ alg: 'RS256' }).setSubject('jwt-user').setIssuer(jwtConfig.oidcIssuer!).setAudience('preflight-api').setIssuedAt(Math.floor(Date.now()/1000)-120).setExpirationTime(Math.floor(Date.now()/1000)-60).sign(privateKey);
   assert.equal((await app.inject({ url: '/api/missions', headers: { authorization: `Bearer ${expired}` } })).statusCode, 401);
+});
+
+test('public browser configuration exposes only public identity settings and enforces production redirect security',async t=>{
+  const {service}=fixture();
+  const config:ApiConfig={...base,environment:'test',authMode:'jwt',oidcIssuer:'https://identity.example.test',oidcAudience:'preflight-api',oidcJwksUrl:'https://identity.example.test/keys',oidcBrowserClientId:'console',oidcBrowserRedirectUri:'https://console.example.test/'};
+  const app=await createApp({service,config,health:async()=>undefined,jwtKey:async()=>{throw new Error('not_used');}});t.after(()=>app.close());
+  const result=await app.inject('/api/auth/config');assert.equal(result.statusCode,200);
+  assert.deepEqual(result.json(),{enabled:true,issuer:config.oidcIssuer,clientId:'console',redirectUri:'https://console.example.test/',allowInsecureLocal:true});
+  const env={NODE_ENV:'production',AUTH_MODE:'jwt',OIDC_ISSUER:config.oidcIssuer,OIDC_AUDIENCE:config.oidcAudience,OIDC_JWKS_URL:config.oidcJwksUrl,DATABASE_URL:'postgres://synthetic:secure-example-not-a-real-secret@db.example.test/preflight?sslmode=verify-full',OIDC_BROWSER_CLIENT_ID:'console'};
+  assert.throws(()=>loadApiConfig(env),/browser_configuration_required/);
+  assert.throws(()=>loadApiConfig({...env,OIDC_BROWSER_REDIRECT_URI:'http://console.example.test/'}),/browser_redirect_invalid/);
 });
 test('rate limits reject excess requests with a structured error', async t => {
   const { service } = fixture(); const app = await createApp({ service, config: { ...base, rateLimit: 2 }, health: async () => undefined }); t.after(() => app.close());
