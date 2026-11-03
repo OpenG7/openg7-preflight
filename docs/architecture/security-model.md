@@ -3,8 +3,13 @@
 L’API vérifie les JWT signés avec issuer, audience, expiration et clés JWKS.
 Keycloak peut fournir ces jetons; aucun realm OpenG7 réel n’est présumé configuré.
 Le mapping des claims et les variables sont dans [le guide d’intégration](../connecting-applications.md).
-La console conserve le jeton saisi uniquement en mémoire; elle ne fournit pas
-encore le parcours OIDC Authorization Code/PKCE d’une connexion centralisée.
+La console fournit Authorization Code/PKCE S256 lorsque le client public et
+l’URI de retour sont configurés côté serveur. oauth4webapi contrôle la réponse,
+state et nonce; le vérificateur temporaire est à usage unique dans sessionStorage
+avec une limite de dix minutes. Les jetons d’accès restent en mémoire et sont
+vérifiés par l’API. Une saisie technique de JWT reste disponible. La déconnexion
+locale efface le jeton; elle ne révoque pas une session chez le fournisseur.
+La qualification avec le realm OpenG7 réel reste à effectuer.
 
 | Rôle | Portée |
 | --- | --- |

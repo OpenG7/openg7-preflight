@@ -11,6 +11,7 @@ export interface ApiConfig {
   databaseUrl: string; authMode: 'development' | 'jwt';
   devTenantId: string; devSubject: string; devApplications: string[]; devRoles: Role[];
   devWebOrigin?: string;
+  oidcBrowserClientId?: string; oidcBrowserRedirectUri?: string;
   oidcIssuer?: string; oidcAudience?: string; oidcJwksUrl?: string;
   rateLimit: number;
 }
@@ -37,12 +38,23 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const oidcIssuer = env['OIDC_ISSUER'];
   const oidcAudience = env['OIDC_AUDIENCE'];
   const oidcJwksUrl = env['OIDC_JWKS_URL'] ?? env['JWKS_URL'];
+  const oidcBrowserClientId=env['OIDC_BROWSER_CLIENT_ID'];
+  const oidcBrowserRedirectUri=env['OIDC_BROWSER_REDIRECT_URI'];
+  if(Boolean(oidcBrowserClientId)!==Boolean(oidcBrowserRedirectUri))throw new HttpError(500,'oidc_browser_configuration_required');
+  if(oidcBrowserClientId&&oidcBrowserRedirectUri){
+    if(authMode!=='jwt')throw new HttpError(500,'oidc_browser_requires_jwt');
+    const redirect=new URL(oidcBrowserRedirectUri);
+    const local=environment!=='production'&&redirect.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(redirect.hostname);
+    if((redirect.protocol!=='https:'&&!local)||redirect.username||redirect.password||redirect.search||redirect.hash)throw new HttpError(500,'oidc_browser_redirect_invalid');
+    nonempty.parse(oidcBrowserClientId);
+  }
   if (authMode === 'jwt') {
     if (!oidcIssuer || !oidcAudience || !oidcJwksUrl) throw new HttpError(500, 'oidc_configuration_required');
     for (const raw of [oidcIssuer, oidcJwksUrl]) {
       const url = new URL(raw);
       if (environment === 'production' && url.protocol !== 'https:') throw new HttpError(500, 'oidc_https_required');
-      if (url.username || url.password) throw new HttpError(500, 'oidc_credentials_in_url');
+      if (url.username || url.password || url.search || url.hash) throw new HttpError(500, 'oidc_url_invalid');
+      if(!['https:','http:'].includes(url.protocol)||(url.protocol==='http:'&&!['localhost','127.0.0.1','[::1]'].includes(url.hostname)))throw new HttpError(500,'oidc_https_required');
     }
   }
   const databaseUrl = env['DATABASE_URL'] ?? '';
@@ -60,6 +72,7 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     devRoles: z.array(z.enum(roles)).min(1).parse((env['DEV_ROLES'] ?? 'administrator').split(',')),
     rateLimit: z.coerce.number().int().min(1).max(10000).parse(env['API_RATE_LIMIT'] ?? '120'),
     ...(oidcIssuer ? { oidcIssuer } : {}), ...(oidcAudience ? { oidcAudience } : {}), ...(oidcJwksUrl ? { oidcJwksUrl } : {}),
+    ...(oidcBrowserClientId&&oidcBrowserRedirectUri?{oidcBrowserClientId,oidcBrowserRedirectUri}:{}),
   };
 }
 

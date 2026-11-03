@@ -56,6 +56,10 @@ export async function createApp(options: AppOptions) {
     return reply.code(status).send({ error: code, correlationId: request.id });
   });
   app.get('/health/live', async () => ({ status: 'ok' }));
+  app.get('/api/auth/config',async()=>options.config.authMode==='jwt'&&options.config.oidcBrowserClientId&&options.config.oidcBrowserRedirectUri?{
+    enabled:true,issuer:options.config.oidcIssuer,clientId:options.config.oidcBrowserClientId,redirectUri:options.config.oidcBrowserRedirectUri,
+    allowInsecureLocal:options.config.environment!=='production',
+  }:{enabled:false});
   app.get('/health/ready', async (_request, reply) => {
     try { await options.health(); return { status: 'ready' }; }
     catch { return reply.code(503).send({ status: 'not_ready' }); }
@@ -84,7 +88,15 @@ export async function createApp(options: AppOptions) {
       if (!result) return reply.code(404).send({ error: 'mission_not_found', correlationId: request.id });
       return result;
     });
-    api.post('/missions/:id/cancel', async request => { const scope = scopeFor(request, operateRoles); z.object({}).strict().parse(request.body ?? {}); return service.cancel(missionId(request), scope); });
+    api.post('/missions/:id/cancel', async request => {
+      const scope = scopeFor(request, submitRoles);
+      const sourceBody=z.object({sourceVersion:z.number().int().positive(),eventId:idSchema}).strict();
+      const operator=scope.roles.some(role=>operateRoles.includes(role as typeof operateRoles[number]));
+      const parsed=z.union([z.object({}).strict(),sourceBody]).parse(request.body===undefined?{}:request.body);
+      const source='sourceVersion' in parsed?sourceBody.parse(parsed):undefined;
+      if(!operator&&!source)throw new HttpError(400,'source_version_required');
+      return service.cancel(missionId(request),scope,source);
+    });
     api.post('/missions/:id/retry', async request => { const scope = scopeFor(request, operateRoles); z.object({}).strict().parse(request.body ?? {}); return service.retry(missionId(request), scope); });
     api.post('/missions/:id/input', async request => {
       const scope = scopeFor(request, submitRoles);

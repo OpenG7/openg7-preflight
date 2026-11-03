@@ -1,0 +1,17 @@
+# Optional attachment to an existing Traefik deployment. Verify its network,
+# entrypoint, resolver and host before explicitly applying this override.
+services:
+  web:
+    networks: [egress, gateway]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${PREFLIGHT_TRAEFIK_NETWORK:?Set the existing Traefik network}
+      traefik.http.routers.preflight.rule: Host(`${PREFLIGHT_PUBLIC_HOST:?Set the public console hostname}`)
+      traefik.http.routers.preflight.entrypoints: ${PREFLIGHT_TRAEFIK_ENTRYPOINT:?Set the existing TLS entrypoint}
+      traefik.http.routers.preflight.tls: "true"
+      traefik.http.routers.preflight.tls.certresolver: ${PREFLIGHT_TRAEFIK_CERTRESOLVER:?Set the existing certificate resolver}
+      traefik.http.services.preflight.loadbalancer.server.port: "8080"
+networks:
+  gateway:
+    external: true
+    name: ${PREFLIGHT_TRAEFIK_NETWORK:?Set the existing Traefik network}

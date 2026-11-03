@@ -206,10 +206,25 @@ export class PreflightService {
     await this.recordAccess(scope,'mission.detail',id);
     return {mission:missionDto(mission),tasks:tasks.rows.map(taskDto),results:results.rows.map(resultDto),proposals:proposals.rows.map(proposalDto),history:history.rows};
   }
-  async cancel(id:string,scope:AccessContext){
-    authorize(scope,['operator','administrator']);
+  async cancel(id:string,scope:AccessContext,source?:{sourceVersion:number;eventId:string}){
+    authorize(scope,['operator','administrator','service_integration']);
+    if(!scope.roles.some(role=>['operator','administrator'].includes(role))&&!source)throw new DomainError('source_version_required',400);
     await transaction(this.pool,async client=>{
+      if(source){
+        const owner=(await client.query<{source_application:string}>('SELECT source_application FROM missions WHERE tenant_id=$1 AND id=$2 AND source_application=ANY($3::text[])',[scope.tenantId,id,scope.applications])).rows[0];
+        if(!owner)throw new DomainError('mission_not_found',404);
+        // Match event-before-mission lock ordering used by source updates and reception.
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`event:${scope.tenantId}:${owner.source_application}:${source.eventId}`]);
+      }
       const mission=await this.locked(client,id,scope);
+      if(source){
+        if(mission.source_version!==source.sourceVersion)throw new DomainError('stale_source_version');
+        const digest=hashInput({type:'mission.cancelled',missionId:id,sourceVersion:source.sourceVersion});
+        const seen=await client.query<{input_hash:string}>('SELECT input_hash FROM source_notifications WHERE tenant_id=$1 AND source_application=$2 AND event_id=$3',[scope.tenantId,mission.source_application,source.eventId]);
+        if(seen.rows[0]){if(seen.rows[0].input_hash!==digest)throw new DomainError('idempotency_conflict');return;}
+        await client.query('INSERT INTO source_notifications(tenant_id,source_application,event_id,input_hash) VALUES($1,$2,$3,$4)',[scope.tenantId,mission.source_application,source.eventId,digest]);
+        await event(client,mission,'source.cancellation_reported',scope.subject,{eventId:source.eventId,sourceVersion:source.sourceVersion});
+      }
       if(mission.status==='cancelled')return;
       if(['completed','superseded'].includes(mission.status))throw new DomainError('mission_not_cancellable');
       await transition(client,mission,'cancelled',scope.subject);await this.invalidate(client,mission);

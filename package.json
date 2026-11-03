@@ -27,9 +27,10 @@
     "infra:up": "docker compose up -d --wait postgres",
     "infra:down": "docker compose down",
     "demo:submit": "node --env-file=.env scripts/submit-demo.mjs",
-    "test": "node --import tsx --test tests/ai.test.ts tests/api.test.ts tests/contracts.test.ts tests/engine.test.ts",
+    "test": "node --import tsx --test tests/ai.test.ts tests/api.test.ts tests/contracts.test.ts tests/engine.test.ts tests/oidc.test.ts tests/production.test.ts",
     "test:integration": "node --env-file=.env scripts/test-integration.mjs",
     "test:web": "node --env-file=.env node_modules/@playwright/test/cli.js test",
+    "test:funding": "npm run build:server && node --env-file=.env --test tests/cross-repo/funding.integration.mjs",
     "test:standards": "node --test scripts/__tests__/standards.test.mjs",
     "check:standards": "node scripts/check-project-standards.mjs"
   },

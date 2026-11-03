@@ -1,0 +1,167 @@
+name: ${PREFLIGHT_PROJECT_NAME:-openg7-preflight-prod}
+
+x-server: &server
+  image: ${PREFLIGHT_SERVER_IMAGE:?Set an explicit Preflight server image tag}
+  build:
+    context: .
+    dockerfile: Dockerfile
+  entrypoint: ["node", "/app/infrastructure/production/entrypoint.mjs"]
+  init: true
+  read_only: true
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  stop_grace_period: 45s
+  networks: [backend, egress]
+  secrets: [database_url, postgres_ca]
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+services:
+  postgres:
+    image: postgres:17.9-alpine
+    restart: unless-stopped
+    entrypoint: ["/bin/bash", "/etc/preflight/postgres-start.sh"]
+    environment:
+      POSTGRES_USER: preflight_admin
+      POSTGRES_DB: preflight
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets: [postgres_admin_password, postgres_app_password, postgres_cert, postgres_key]
+    volumes:
+      - preflight-production-data:/var/lib/postgresql/data
+      - ./infrastructure/production/postgres-start.sh:/etc/preflight/postgres-start.sh:ro
+      - ./infrastructure/production/postgres-init.sh:/docker-entrypoint-initdb.d/10-preflight-role.sh:ro
+      - ./infrastructure/production/pg_hba.conf:/etc/preflight/pg_hba.conf:ro
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U preflight_admin -d preflight"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+    stop_grace_period: 60s
+    shm_size: 128mb
+    mem_limit: 1g
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+  migrate:
+    <<: *server
+    command: ["node", "dist/scripts/migrate.js"]
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL_FILE: /run/secrets/database_url
+    depends_on:
+      postgres: {condition: service_healthy}
+    mem_limit: 512m
+
+  api:
+    <<: *server
+    command: ["node", "dist/apps/api/src/main.js"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      AUTH_MODE: jwt
+      DATABASE_URL_FILE: /run/secrets/database_url
+      OIDC_ISSUER: ${OIDC_ISSUER:?Set the HTTPS OIDC issuer}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:?Set the API audience}
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL:?Set the HTTPS JWKS URL}
+      OIDC_BROWSER_CLIENT_ID: ${OIDC_BROWSER_CLIENT_ID:?Set the public browser client ID}
+      OIDC_BROWSER_REDIRECT_URI: ${OIDC_BROWSER_REDIRECT_URI:?Set the HTTPS console callback URI}
+      API_RATE_LIMIT: ${API_RATE_LIMIT:-600}
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    mem_limit: 512m
+    cpus: 1.0
+
+  worker:
+    <<: *server
+    command: ["node", "dist/apps/worker/src/main.js"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL_FILE: /run/secrets/database_url
+      AI_PROVIDER: openai
+      AI_EXTERNAL_ENABLED: "true"
+      OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
+      OPENAI_MODEL: ${OPENAI_MODEL:?Set a structured-output compatible model}
+      AI_INPUT_PRICE_PER_MILLION: ${AI_INPUT_PRICE_PER_MILLION:?Set the verified model input price}
+      AI_OUTPUT_PRICE_PER_MILLION: ${AI_OUTPUT_PRICE_PER_MILLION:?Set the verified model output price}
+      AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-1500}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+      WORKER_HEARTBEAT_FILE: /tmp/preflight-worker-heartbeat.json
+    secrets: [database_url, postgres_ca, openai_api_key]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "node", "/app/infrastructure/production/worker-health.mjs"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    mem_limit: 512m
+    cpus: 1.0
+
+  web:
+    image: ${PREFLIGHT_WEB_IMAGE:?Set an explicit Preflight web image tag}
+    build:
+      context: .
+      dockerfile: infrastructure/production/Dockerfile.web
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [egress]
+    ports: ["127.0.0.1:${PREFLIGHT_WEB_PORT:-8087}:8080"]
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    stop_grace_period: 20s
+    mem_limit: 128m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+networks:
+  backend:
+    internal: true
+  egress: {}
+
+volumes:
+  preflight-production-data:
+
+secrets:
+  database_url:
+    file: ${PREFLIGHT_DATABASE_URL_FILE:?Set the database URL secret file}
+  postgres_admin_password:
+    file: ${PREFLIGHT_POSTGRES_ADMIN_PASSWORD_FILE:?Set the PostgreSQL admin password file}
+  postgres_app_password:
+    file: ${PREFLIGHT_POSTGRES_APP_PASSWORD_FILE:?Set the PostgreSQL application password file}
+  postgres_ca:
+    file: ${PREFLIGHT_POSTGRES_CA_FILE:?Set the PostgreSQL CA certificate file}
+  postgres_cert:
+    file: ${PREFLIGHT_POSTGRES_CERT_FILE:?Set the PostgreSQL server certificate file}
+  postgres_key:
+    file: ${PREFLIGHT_POSTGRES_KEY_FILE:?Set the PostgreSQL server key file}
+  openai_api_key:
+    file: ${PREFLIGHT_OPENAI_API_KEY_FILE:?Set the OpenAI API key file}
