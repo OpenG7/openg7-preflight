@@ -26,7 +26,7 @@ Les missions, tâches, résultats intermédiaires, propositions, lots et histori
 sont persistés. Le fournisseur par défaut est une **simulation déterministe**,
 identifiée dans chaque brouillon; aucune inférence réelle n’est prétendue.
 Le connecteur Funding est livré dans son dépôt et testé localement avec Preflight.
-Ses connexions de production, Social, Keycloak réel, le runtime et le model gateway
+Ses connexions de production, Social, Keycloak de production, le runtime et le model gateway
 ne sont pas qualifiés.
 
 ## Démarrage local
@@ -71,6 +71,11 @@ serveur `openg7-demo`, rôle administrateur et deux applications autorisées.
 Elle exige `NODE_ENV=development` et une écoute loopback. Elle est refusée en
 production. Pour un JWT signé et les claims attendus, voir [sécurité](docs/architecture/security-model.md)
 et [connexion d’application](docs/connecting-applications.md).
+
+Funding et Preflight peuvent partager les comptes du realm Keycloak `openg7`,
+avec une session SSO et des droits distincts. Le [guide du realm partagé](docs/shared-realm-sso.md)
+décrit les clients, les habilitations et la recette locale jetable; aucun realm
+existant n’est modifié par le démarrage de Preflight.
 
 ## Commandes et vérifications
 

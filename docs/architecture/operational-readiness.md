@@ -33,7 +33,10 @@ installation de production. Appliquer les migrations avant le démarrage.
 
 - Funding : connecteur livré et testé localement; identité et liaison de production non qualifiées. Social reste démonstratif.
 - IA : mock par défaut; OpenAI testé par fixtures HTTP, pas par appel live.
-- Identité : JWT et console PKCE livrés; realm Keycloak réel non qualifié.
+- Identité : JWT, console PKCE automatique et [SSO partagé avec Funding](../shared-realm-sso.md)
+  vérifiés sur Keycloak Docker jetable, y compris migration et MFA. Le profil
+  localhost partagé avec Funding est actif et vérifié avec mot de passe seul;
+  realm de production non qualifié.
 - Résultats : schéma et contrôles déterministes, pas de mesure universelle de vérité.
 - Coût : réservations conservatrices et estimations, pas de facturation fournisseur.
 - Lots : export préparatoire, aucune approbation ni remise sortante automatique.

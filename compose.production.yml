@@ -69,6 +69,7 @@ services:
       HOST: 0.0.0.0
       PORT: 3000
       AUTH_MODE: jwt
+      OIDC_REQUIRE_MFA: "true"
       DATABASE_URL_FILE: /run/secrets/database_url
       OIDC_ISSUER: ${OIDC_ISSUER:?Set the HTTPS OIDC issuer}
       OIDC_AUDIENCE: ${OIDC_AUDIENCE:?Set the API audience}

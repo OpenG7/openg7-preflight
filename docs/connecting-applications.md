@@ -31,12 +31,26 @@ Claims JWT signés requis (exemple synthétique, pas un jeton utilisable) :
 
 RS256 et ES256 sont acceptés. Les claims tenant_id et applications nécessitent
 des mappers contrôlés dans l’identité réelle. Aucun en-tête client ne remplace
-ces permissions signées. Le parcours console PKCE est livré; le realm Keycloak
-réel et les webhooks signés restent à qualifier. Configurer ensemble
+ces permissions signées. En production, les jetons humains doivent aussi contenir
+`amr: ["pwd", "mfa"]` (au minimum la valeur `mfa` attestée par le fournisseur).
+Un jeton valide sans cette preuve reçoit `403 mfa_required`. Hors production,
+`OIDC_REQUIRE_MFA=true` active le même contrôle. Seul un jeton dont tous les rôles
+Preflight reconnus sont `service_integration` est exempté; ajouter un rôle humain
+réactive l’exigence MFA. Aucune valeur ACR arbitraire ne remplace cette preuve.
+Pour le profil local explicitement sans MFA, `OIDC_REQUIRE_PASSWORD=true`
+exige `amr` contenant `pwd` dans les jetons humains (`403 password_required`
+sinon). Cette exigence additionnelle ne désactive jamais le MFA de production;
+une valeur `OIDC_REQUIRE_MFA=false` reste refusée en production.
+Le parcours console PKCE et le realm local Funding sont vérifiés; le realm
+Keycloak de production et les webhooks signés restent à qualifier. Configurer ensemble
 OIDC_BROWSER_CLIENT_ID et OIDC_BROWSER_REDIRECT_URI avec un client public, S256
 et une URI/origine exactes. Le point public /api/auth/config ne retourne que ces
 paramètres publics. Les jetons restent en mémoire, jusqu’au rechargement ou à
 la déconnexion locale; les sessions de l’issuer ne sont pas révoquées par celle-ci.
+
+Pour partager le realm `openg7` et les comptes Funding avec des clients et droits
+distincts, suivre le [guide SSO du realm partagé](shared-realm-sso.md). Les rôles
+Funding restent gérés dans Funding et ne deviennent pas des droits Preflight.
 
 La production exige HTTPS pour issuer/JWKS et sslmode=verify-full pour PostgreSQL,
 avec des identifiants non démonstratifs. Pour un transport sortant, implémenter
