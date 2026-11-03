@@ -122,6 +122,7 @@ Arrêter l’infrastructure locale sans effacer les données : `npm run infra:do
 - [Contrats](docs/contracts.md) et [API HTTP](docs/api.md).
 - [Ajouter un workflow](docs/adding-workflows.md) et [connecter une application](docs/connecting-applications.md).
 - [Diagnostic](docs/troubleshooting.md) et [état vérifié, compatibilité et limites](docs/architecture/operational-readiness.md).
+- [Travaux restants : VPS et raccordement Funding](docs/architecture/operational-readiness.md#travaux-restants).
 - [Consignes](AGENTS.md) et [standard commun OpenG7](docs/standards/README.md).
 
 L’adaptateur OpenAI est activable uniquement avec clé, modèle, tarifs et accord
