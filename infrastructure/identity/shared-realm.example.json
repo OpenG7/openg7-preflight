@@ -1,0 +1,8 @@
+{
+  "issuer": "https://auth.example.invalid/realms/openg7",
+  "consoleClientId": "preflight-console",
+  "audience": "preflight-api",
+  "redirectUri": "https://preflight.example.invalid/",
+  "tenantId": "example-tenant",
+  "applications": ["funding-platform", "openg7-social"]
+}

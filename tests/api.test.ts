@@ -82,6 +82,66 @@ test('verified JWT claims define tenant/application scope; viewer mutations forb
   assert.equal((await app.inject({ url: '/api/missions', headers: { authorization: `Bearer ${expired}` } })).statusCode, 401);
 });
 
+test('human JWTs require verified MFA in production, including mixed human and service roles', async t => {
+  const { publicKey, privateKey } = await generateKeyPair('RS256');
+  const production = { NODE_ENV: 'production', AUTH_MODE: 'jwt', DATABASE_URL: 'postgres://synthetic:strong-synthetic-only@database.example.test/preflight?sslmode=verify-full', OIDC_ISSUER: 'https://identity.example.test/realms/openg7', OIDC_AUDIENCE: 'preflight-api', OIDC_JWKS_URL: 'https://identity.example.test/keys' };
+  assert.throws(() => loadApiConfig({ ...production, OIDC_REQUIRE_MFA: 'false' }), /production_mfa_required/);
+  assert.equal(loadApiConfig(production).oidcRequireMfa, true);
+  for (const environment of ['production', 'test'] as const) {
+    const config: ApiConfig = { ...base, environment, authMode: 'jwt', oidcIssuer: production.OIDC_ISSUER, oidcAudience: production.OIDC_AUDIENCE, oidcJwksUrl: production.OIDC_JWKS_URL, oidcRequireMfa: environment === 'test' };
+    const { service } = fixture();
+    const app = await createApp({ service, config, health: async () => undefined, jwtKey: async () => publicKey });
+    t.after(() => app.close());
+    const request = async (extra: Record<string, unknown>) => {
+      const token = await new SignJWT({ tenant_id: 'tenant-mfa', applications: ['funding-platform'], realm_access: { roles: ['viewer'] }, ...extra })
+        .setProtectedHeader({ alg: 'RS256' }).setSubject('synthetic-user').setIssuer(config.oidcIssuer!).setAudience('preflight-api').setIssuedAt().setExpirationTime('5m').sign(privateKey);
+      return app.inject({ url: '/api/session', headers: { authorization: `Bearer ${token}` } });
+    };
+    for (const extra of [{}, { amr: ['pwd'] }, { acr: 'mfa' }, { realm_access: { roles: ['service_integration', 'administrator'] } }]) {
+      const response = await request(extra);
+      assert.equal(response.statusCode, 403);
+      assert.equal(response.json().error, 'mfa_required');
+    }
+    assert.equal((await request({ amr: ['pwd', 'mfa'] })).statusCode, 200);
+    assert.equal((await request({ amr: 'mfa' })).statusCode, 401);
+    const machine = await request({ realm_access: { roles: ['service_integration'] } });
+    assert.equal(machine.statusCode, 200);
+    assert.deepEqual(machine.json().roles, ['service_integration']);
+  }
+});
+
+test('an explicit local password policy rejects human JWTs without signed password assurance and cannot weaken production MFA',async t=>{
+  const {publicKey,privateKey}=await generateKeyPair('RS256');
+  const environment={NODE_ENV:'development',AUTH_MODE:'jwt',DATABASE_URL:base.databaseUrl,OIDC_ISSUER:'https://identity.example.test/realms/openg7',OIDC_AUDIENCE:'preflight-api',OIDC_JWKS_URL:'https://identity.example.test/keys'};
+  assert.equal(loadApiConfig(environment).oidcRequirePassword,false);
+  assert.equal(loadApiConfig({...environment,OIDC_REQUIRE_PASSWORD:'true',OIDC_REQUIRE_MFA:'false'}).oidcRequirePassword,true);
+  assert.throws(()=>loadApiConfig({...environment,OIDC_REQUIRE_PASSWORD:'yes'}));
+  const production={...environment,NODE_ENV:'production',DATABASE_URL:'postgres://synthetic:strong-synthetic-only@database.example.test/preflight?sslmode=verify-full'};
+  assert.equal(loadApiConfig({...production,OIDC_REQUIRE_PASSWORD:'false'}).oidcRequireMfa,true);
+  assert.throws(()=>loadApiConfig({...production,OIDC_REQUIRE_PASSWORD:'true',OIDC_REQUIRE_MFA:'false'}),/production_mfa_required/);
+  const config=loadApiConfig({...environment,OIDC_REQUIRE_PASSWORD:'true',OIDC_REQUIRE_MFA:'false'});
+  const {service}=fixture();
+  const app=await createApp({service,config,health:async()=>undefined,jwtKey:async()=>publicKey});t.after(()=>app.close());
+  const request=async(extra:Record<string,unknown>,target=app)=>{
+    const token=await new SignJWT({tenant_id:'synthetic-local-tenant',applications:['funding-platform'],realm_access:{roles:['viewer']},...extra})
+      .setProtectedHeader({alg:'RS256'}).setSubject('synthetic-local-user').setIssuer(config.oidcIssuer!).setAudience('preflight-api').setIssuedAt().setExpirationTime('5m').sign(privateKey);
+    return target.inject({url:'/api/session',headers:{authorization:`Bearer ${token}`}});
+  };
+  for(const extra of [{},{amr:[]},{amr:['mfa']},{acr:'pwd'},{realm_access:{roles:['service_integration','viewer']}}]){
+    const response=await request(extra);assert.equal(response.statusCode,403);assert.equal(response.json().error,'password_required');
+  }
+  assert.equal((await request({amr:['pwd']})).statusCode,200);
+  assert.equal((await request({amr:['pwd','mfa']})).statusCode,200);
+  assert.equal((await request({amr:'pwd'})).statusCode,401);
+  assert.equal((await request({realm_access:{roles:['service_integration']}})).statusCode,200);
+  const combinedApp=await createApp({service,config:{...config,oidcRequireMfa:true},health:async()=>undefined,jwtKey:async()=>publicKey});t.after(()=>combinedApp.close());
+  const missingMfa=await request({amr:['pwd']},combinedApp);assert.equal(missingMfa.statusCode,403);assert.equal(missingMfa.json().error,'mfa_required');
+  const missingPassword=await request({amr:['mfa']},combinedApp);assert.equal(missingPassword.statusCode,403);assert.equal(missingPassword.json().error,'password_required');
+  assert.equal((await request({amr:['pwd','mfa']},combinedApp)).statusCode,200);
+  const productionApp=await createApp({service,config:{...config,environment:'production',oidcRequireMfa:false,oidcRequirePassword:false},health:async()=>undefined,jwtKey:async()=>publicKey});t.after(()=>productionApp.close());
+  const passwordOnly=await request({amr:['pwd']},productionApp);assert.equal(passwordOnly.statusCode,403);assert.equal(passwordOnly.json().error,'mfa_required');
+});
+
 test('public browser configuration exposes only public identity settings and enforces production redirect security',async t=>{
   const {service}=fixture();
   const config:ApiConfig={...base,environment:'test',authMode:'jwt',oidcIssuer:'https://identity.example.test',oidcAudience:'preflight-api',oidcJwksUrl:'https://identity.example.test/keys',oidcBrowserClientId:'console',oidcBrowserRedirectUri:'https://console.example.test/'};

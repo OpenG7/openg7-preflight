@@ -1,5 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ApiService } from './core/api.service';
 import { BriefingComponent } from './features/briefing/briefing.component';
 import { MissionsComponent } from './features/missions/missions.component';
@@ -20,6 +21,7 @@ export class AppComponent {
   readonly authOpen = signal(false);
   readonly authError = signal('');
   readonly authBusy = signal(false);
+  readonly reauthenticationRequired = signal<'mfa'|'password'|undefined>(undefined);
   token = '';
   readonly ssoAvailable=signal(false);
   private oidc?:BrowserOidcClient;
@@ -41,20 +43,32 @@ export class AppComponent {
       this.ssoAvailable.set(config.enabled===true);
       this.oidc=new BrowserOidcClient(config,{storage:sessionStorage,currentUrl:()=>new URL(location.href),redirect:url=>location.assign(url),cleanCallback:()=>history.replaceState(null,'',location.pathname)});
       const token=await this.oidc.resume();if(token)this.api.setToken(token);
-      await this.connect();
+      await this.connect(!token);
     }catch{this.authError.set('La connexion n’a pas abouti. Relancez-la depuis cette console.');this.authOpen.set(true);}
   }
   async loginSso():Promise<void>{
     this.authBusy.set(true);this.authError.set('');
-    try{await this.oidc?.begin();}catch{this.authError.set('La connexion OpenG7 est indisponible. Vérifiez la configuration du fournisseur d’identité.');this.authBusy.set(false);}
+    try{await this.oidc?.begin({reauthenticate:this.reauthenticationRequired()!==undefined});}catch{this.authError.set('La connexion OpenG7 est indisponible. Vérifiez la configuration du fournisseur d’identité.');this.authBusy.set(false);}
+  }
+  ssoLoginLabel():string{
+    if(this.reauthenticationRequired()==='mfa')return 'Se reconnecter avec MFA';
+    return this.reauthenticationRequired()==='password'?'Se reconnecter avec OpenG7':'Se connecter avec OpenG7';
   }
   title(): string { return this.nav.find(item => item.id === this.active())?.title ?? 'Preflight'; }
-  async connect(): Promise<void> {
+  async connect(automaticLogin=false): Promise<void> {
     this.authBusy.set(true); this.authError.set('');
-    try { await this.api.authenticate(); this.authOpen.set(false); this.token = ''; }
-    catch (error) { this.authError.set(this.api.message(error)); this.authOpen.set(true); }
+    try { await this.api.authenticate(); this.oidc?.sessionEstablished(); this.reauthenticationRequired.set(undefined); this.authOpen.set(false); this.token = ''; }
+    catch (error) {
+      const assurance=error instanceof HttpErrorResponse&&error.status===403?error.error?.error:undefined;
+      this.reauthenticationRequired.set(assurance==='mfa_required'?'mfa':assurance==='password_required'?'password':undefined);
+      if(automaticLogin&&error instanceof HttpErrorResponse&&error.status===401){
+        try{if(await this.oidc?.beginAutomatically())return;}
+        catch{this.authError.set('La connexion OpenG7 est indisponible. Relancez-la depuis cette console.');this.authOpen.set(true);return;}
+      }
+      this.authError.set(this.api.message(error)); this.authOpen.set(true);
+    }
     finally { this.authBusy.set(false); }
   }
   async login(): Promise<void> { this.api.setToken(this.token); await this.connect(); }
-  logout(): void { this.api.clearToken(); this.authOpen.set(true); }
+  logout(): void { this.oidc?.suspendAutomaticLogin(); this.api.clearToken(); this.authError.set(''); this.authOpen.set(true); }
 }
