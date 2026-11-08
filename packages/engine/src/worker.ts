@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { PgBoss } from 'pg-boss';
 import { AiProviderError, aiTaskResultSchema, type AiProvider } from '../../ai/src/index.js';
+import { preparationOutputSchema } from '../../contracts/src/index.js';
+import { editorialProviderData, missingEditorialInformation, prepareEditorialProposal } from './editorial.js';
 import { missingInput, resolveWorkflow } from './workflows.js';
 import { DomainError, enqueue, event, hashInput, terminalStates, transaction, transition, type MissionRow, type ResultRow, type TaskRow } from './service.js';
 
@@ -83,14 +85,14 @@ async function execute(pool:Pool,claim:Claim,provider:AiProvider,signal:AbortSig
   const provenance=deterministicProvenance(mission,task);
   if(task.kind==='completeness'){
     const missing=missingInput(definition,mission.input);if(missing.length)throw new WaitingInput(missing);
-    return {output:{complete:true,checkedFields:definition.requiredInput},provenance};
+    return {output:{complete:true,checkedFields:definition.requiredInputFor?.(mission.input)??definition.requiredInput,...(mission.input['editorialContext'] === undefined ? {} : {missingInformation:missingEditorialInformation(mission.input),partial:missingEditorialInformation(mission.input).length > 0})},provenance};
   }
   if(task.kind==='preparation-policy'){
     if(mission.constraints.humanApprovalRequired!==true)throw new DomainError('human_review_required',422);
     return {output:{policy:definition.policy,preparationOnly:true,humanReviewRequired:true,externalPublicationAllowed:false,businessDecisionAllowed:false},provenance};
   }
   if(task.kind==='draft'){
-    const raw=await provider.generate({kind:definition.capability,data:mission.input,maxCostUsd:provider.simulated?0:claim.budget,timeoutMs:mission.constraints.timeoutMs},{signal});
+    const raw=await provider.generate({kind:definition.capability,data:editorialProviderData(mission.input),maxCostUsd:provider.simulated?0:claim.budget,timeoutMs:mission.constraints.timeoutMs},{signal});
     const parsed=aiTaskResultSchema.safeParse(raw);
     if(!parsed.success)throw new AiProviderError('provider_output_invalid');
     if(parsed.data.provenance.simulated!==provider.simulated||parsed.data.provenance.provider!==provider.id)throw new AiProviderError('provider_provenance_invalid');
@@ -110,7 +112,8 @@ async function execute(pool:Pool,claim:Claim,provider:AiProvider,signal:AbortSig
     if(checks.length!==3)throw new DomainError('checks_incomplete');
     const warnings=Array.isArray(draft.output['warnings'])?draft.output['warnings'] as string[]:[];
     const simulated=draft.provenance['simulated']===true;
-    const anomalies=warnings.filter(warning=>!simulated||(!warning.startsWith('Simulation déterministe')&&!warning.startsWith('Les faits, droits')));
+    const editorialPreparation=prepareEditorialProposal(mission.input,preparationOutputSchema.parse(draft.output),mission.source_version);
+    const anomalies=[...warnings.filter(warning=>!simulated||(!warning.startsWith('Simulation déterministe')&&!warning.startsWith('Les faits, droits'))),...(editorialPreparation?.common.missingInformation.map(field=>`Information manquante : ${field}`) ?? [])];
     const proposal={
       resultIds:results.map(result=>result.id),draftResultId:draft.id,sourceVersion:mission.source_version,
       checks:checks.map(check=>({resultId:check.id,kind:check.kind,passed:true})),anomalies,
@@ -118,6 +121,7 @@ async function execute(pool:Pool,claim:Claim,provider:AiProvider,signal:AbortSig
       provenance:draft.provenance,limitations:warnings,
       blockingConditions:simulated?['Résultat de démonstration; validation dans l’application source requise.']:['Autorisations, version et statut à revérifier par l’application source.'],
       authority:'source_application',businessDecisionExecuted:false,
+      ...(editorialPreparation ? {editorialPreparation} : {}),
     };
     return {output:{prepared:true,type:anomalies.length?'human_arbitration':'review',risk:anomalies.length?'exception':'normal'},provenance,proposal};
   }

@@ -61,12 +61,17 @@ Sources inspectées : [inventaire](architecture/ecosystem-integration.md).
 
 ## Raccordement de Funding Platform
 
-**État actuel :** le connecteur est implémenté dans le dépôt Funding, dans un
-module et un relais indépendants du moteur Preflight. Une recette locale teste
-l’activation Funding, OAuth/JWKS signé, l’API et le worker Preflight, puis l’import
-de propositions privées dans Funding. Le panneau administratif Funding les
-présente en lecture seule. Les identités de service et connexions de production
-restent à configurer et qualifier; l’IA de recette est explicitement simulée.
+Le raccordement de l’Atelier utilise le client HTTP v1 de Funding et un registre
+transactionnel des changements source. Le relais backend conserve une mission
+stable, observe ses résultats et importe une proposition privée après revalidation.
+L’adoption humaine alimente les brouillons Funding existants, sans approbation
+ni publication. Son contrat et ses conditions d’activation sont décrits dans
+`docs/technical/publication-workshop.md` du checkout Funding.
+
+L’inspection du 8 novembre 2026 a constaté que les anciens bilans décrivaient un
+connecteur absent du checkout Funding disponible; ce raccordement remplace ces
+références. L’activation reste explicite et désactivée par défaut. Les identités,
+les connexions de production et une inférence IA réelle restent à qualifier.
 
 Le parcours utilise les contrats API v1. Les notifications de décision à la fin
 restent à brancher aux actions métier Funding; aucune route Funding n’est inventée.
@@ -77,7 +82,7 @@ sequenceDiagram
   participant P as API Preflight
   participant W as Worker Preflight
   participant H as Personne autorisée
-  Note over F,P: Connecteur testé localement; identité réelle à qualifier
+  Note over F,P: Activation explicite; identité réelle à qualifier
   F->>F: Valider le changement métier et conserver sa livraison
   F->>P: POST /api/events : mission.submitted
   P-->>F: 202 + missionId, ou doublon 200
@@ -86,8 +91,10 @@ sequenceDiagram
   P-->>F: Brouillon, provenance, version et conditions de revue
   H->>F: Examiner la proposition ou le lot préparé
   F->>F: Vérifier droits, version et règles; prendre la décision
-  F->>P: POST /api/missions/:id/source-decision
-  P-->>F: Suivi opérationnel clôturé
+  opt Notification ultérieure à raccorder aux décisions Funding
+    F->>P: POST /api/missions/:id/source-decision
+    P-->>F: Suivi opérationnel clôturé
+  end
 ```
 
 ### Échanges disponibles côté Preflight
@@ -96,10 +103,10 @@ sequenceDiagram
 | --- | --- | --- |
 | Authentifier Funding | JWT vérifié, rôle service_integration, tenant et applications | Client credentials livré; provisionner l’identité réelle et ses claims limités à funding-platform |
 | Confier une préparation | POST /api/events avec mission.submitted, ou POST /api/missions | Outbox transactionnelle et relais livrés; activation désactivée par défaut |
-| Préparer le brouillon | sponsorship-preparation-v1, version1.0 | title, description et benefits dérivés d’un snapshot minimisé dans Funding |
-| Consulter la préparation | GET /api/missions/:id et GET /api/proposals?application=funding-platform&status=prepared | Lecture, validation, import privé et panneau administratif livrés |
+| Préparer le brouillon | sponsorship-preparation-v1, version1.0 | editorialContext optionnel, contenu commun et déclinaisons Web/Facebook; anciennes entrées v1 compatibles |
+| Consulter la préparation | GET /api/missions/:id et GET /api/proposals?application=funding-platform&status=prepared | Retour privé contrôlé puis adoption humaine dans les brouillons Funding |
 | Préparer une revue collective | API review-batches, exclusion et export versionnés | Réutiliser la sélection dans Funding avec contrôle de chaque dossier et des droits de l’appelant |
-| Invalider un ancien travail | POST /api/events avec source.updated | Réconciliation des sources suivies livrée; chaque mutation ne possède pas encore son propre événement transactionnel |
+| Invalider un ancien travail | POST /api/events avec source.updated | Changements pertinents capturés transactionnellement puis réconciliés; anciennes propositions conservées comme obsolètes |
 | Fournir une information manquante | POST /api/missions/:id/input | Compléter une mission en attente; toute évolution du snapshot source doit aussi respecter son versionnement |
 | Notifier une décision déjà prise | POST /api/missions/:id/source-decision | Envoyer sourceVersion, decision et eventId après validation et exécution autorisées dans Funding |
 | Annuler depuis la source | POST /api/missions/:id/cancel | Client livré; sourceVersion et eventId obligatoires pour le rôle service, branchement métier encore à définir |
@@ -108,21 +115,18 @@ Le jeton technique reste dans le backend Funding. Preflight limite chaque accès
 au tenant et aux applications du jeton; les deux systèmes gardent leurs propres
 bases et responsabilités, même s’ils sont hébergés sur un seul VPS.
 
-### Contrat de version à préciser
+### Version source et snapshot
 
-L’inspection ciblée du dépôt Funding le 2 novembre 2026 confirme que l’activation
-des engagements est déjà vérifiée côté serveur dans sa transaction métier
-(sponsorship-commitments/repository.ts et contributions-write.repository.ts,
-sous apps/funding-api/src). C’est un point de déclenchement à raccorder, avec
-enregistrement durable de l’intention d’envoi dans la transaction et livraison
-réseau après commit, plutôt qu’un déclenchement depuis le navigateur.
+L’activation des engagements est vérifiée côté serveur dans sa transaction métier.
+La migration additive de l’Atelier conserve les changements pertinents dans cette
+transaction. Le relais prépare puis envoie les missions après commit; l’ouverture
+de l’onglet ne crée pas de mission. Les reprises conservent les identifiants et le
+contenu immuable de l’envoi.
 
-Funding possède aussi une préparation et une approbation auditable propres dans
-admin-preparation.service.ts et admin-dossier-preparation.http.ts. Le connecteur
-devra utiliser ce domaine avec un contrat revu, sans transformer l’import d’une
-proposition Preflight en approbation humaine automatique. Ses mécanismes d’effets
-différés/idempotents de notifications constituent une référence à examiner, pas
-une liaison Preflight déjà disponible.
+Funding conserve sa préparation administrative et son examen par prestation.
+L’import de proposition reste privé. L’adoption vérifie la source courante et les
+brouillons manuels; la revue, l’autorisation et l’exécution restent des opérations
+Funding distinctes, soumises à leurs contrôles existants.
 
 L’inspection de Funding montre des versions numériques d’engagement, mais aussi
 des empreintes et horodatages textuels pour certaines préparations/publications.
@@ -138,9 +142,8 @@ moment de la décision, même si Preflight affichait review_ready auparavant.
 
 ### Fiabilité et autorité
 
-Funding devra conserver l’intention d’envoi dans la même transaction que le
-changement métier, puis effectuer les appels réseau après commit avec reprises
-et clés d’événement stables.
+Funding conserve l’intention d’envoi dans la transaction du changement métier,
+puis effectue les appels réseau après commit avec reprises et clés stables.
 L’outbox interne de Preflight fiabilise ses propres tâches; elle ne garantit pas
 qu’un changement Funding a effectivement été transmis. En cas de timeout, le
 connecteur pourra renvoyer la même mission avec le même eventId : une réception

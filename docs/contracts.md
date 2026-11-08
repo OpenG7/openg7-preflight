@@ -43,6 +43,33 @@ Les événements initiaux sont `mission.submitted` et `source.updated` avec iden
 unique et version de schéma. Les résultats possèdent une provenance et un schéma
 de sortie strict; une réponse IA invalide ne devient pas un résultat de brouillon.
 
+## Proposition éditoriale de commandite
+
+Le workflow `sponsorship-preparation-v1` accepte un `input.editorialContext`
+optionnel, strict et versionné `1.0`. Le contrat propriétaire se trouve dans
+[editorial.ts](../packages/contracts/src/editorial.ts); les missions v1 sans ce
+contexte et le workflow Social restent compatibles.
+
+Le contexte identifie l’engagement, sa version, l’empreinte SHA-256 du snapshot,
+le consentement et le nom public autorisé, les faits source nécessaires, les
+informations manquantes et les obligations exactes Web/Facebook. Un nom public
+sans consentement est refusé. Les coordonnées administratives privées inutiles
+ne font pas partie du matériau envoyé au fournisseur. Une absence de consentement
+ou d’identité produit une préparation partielle, sans texte public nominatif.
+
+La proposition peut inclure `editorialPreparation`, avec un contenu `common` et
+des `variants` par obligation et destination. Son état est `partial` ou
+`ready_for_review`; `publicationAuthorized` reste toujours `false`. Les adaptations
+sont déterministes à partir du même brouillon validé, sans appel IA supplémentaire.
+La provenance fournisseur/modèle/simulation reste celle du résultat référencé.
+
+Les versions internes du contenu commun et des déclinaisons commencent à 1 dans
+chaque proposition. Elles ne remplacent ni la révision source monotone, ni la
+version d’engagement, ni les versions des brouillons, approbations et publications
+Funding. L’import et l’adoption humaine doivent revalider ces références et
+préserver les modifications manuelles. Les médias restent sans sélection tant
+que leurs droits n’ont pas été qualifiés pour chaque destination.
+
 L’enveloppe mission.submitted contient `schemaVersion`, `eventId`, `type` et
 `mission` (le contrat complet ci-dessus). Exemple de notification d’obsolescence :
 
