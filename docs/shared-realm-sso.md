@@ -269,10 +269,12 @@ vérifier aussi l'accès HTTPS réel et la découverte OIDC depuis l'API.
 
 Utiliser uniquement le profil `identity-local`, sans `full`. Les services portent
 des noms `preflight-*` : un service nommé `api` sur le réseau Funding entrerait en
-collision avec son alias DNS existant. Seule l'API Preflight rejoint le réseau
-externe `openg7-edge` pour joindre `auth.openg7.test`; la console publie son propre
-port TLS sur loopback et ne modifie pas Traefik Funding. API, worker et base
-Preflight ne reçoivent aucun nouveau port hôte par cet overlay.
+collision avec son alias DNS existant. L'API Preflight rejoint le réseau
+externe `openg7-edge` pour joindre `auth.openg7.test`. Le serveur Web rejoint aussi
+ce réseau avec l'alias dédié `preflight.openg7.test`, afin que l'API Funding puisse
+lire les propositions en HTTPS. La console publie son propre port TLS sur
+loopback et ne modifie pas Traefik Funding. API, worker et base Preflight ne
+reçoivent aucun nouveau port hôte par cet overlay.
 
 Pour arrêter uniquement les processus Preflight ajoutés, en conservant les deux
 bases et Funding :
@@ -283,6 +285,64 @@ docker compose --env-file .local/identity-local.env -f docker-compose.yml -f com
 
 Ne pas utiliser `down -v`. Le fichier `.env` habituel n'est pas modifié par cette
 configuration; le fichier local explicite est passé à chaque commande.
+
+### Lecture des propositions depuis Funding local
+
+Le menu Preflight de Funding consulte les propositions par son propre backend.
+Cette lecture utilise l'identité de service optionnelle décrite plus haut,
+limitée au tenant configuré et à `funding-platform`; aucun jeton humain Funding
+n'est transféré au navigateur Preflight. Le rôle `service_integration` permet
+aussi des opérations d'intégration : c'est le module de consultation Funding
+qui borne ses appels Preflight à la lecture. Il n'approuve aucune proposition
+et n'active pas le connecteur producteur.
+
+Le certificat servi par `preflight-web` doit couvrir à la fois `localhost` et
+`preflight.openg7.test`, avec la même CA locale déjà approuvée par Funding.
+Un certificat qui ne couvre que `localhost` ne suffit pas pour l'appel entre
+conteneurs. Avec mkcert déjà installé et cette CA vérifiée, générer un certificat
+dédié dans un répertoire privé ignoré, puis adapter `PREFLIGHT_LOCAL_CERT_FILE`
+et `PREFLIGHT_LOCAL_KEY_FILE` dans le fichier local explicite. Ne pas remplacer
+les certificats Funding ni changer l'issuer `auth.openg7.test` ou le callback
+console `https://localhost:8444/`. Ne pas désactiver la vérification TLS.
+
+Dans le checkout Funding, l'overlay `docker-compose.preflight-inbox.yml`
+complète les mêmes fichiers Compose que l'installation locale existante.
+Configurer côté serveur les valeurs publiques suivantes et le chemin protégé
+du secret du client de service, jamais sa valeur dans Git :
+
+```dotenv
+PREFLIGHT_INBOX_ENABLED=true
+PREFLIGHT_URL=https://preflight.openg7.test:8443
+PREFLIGHT_CONSOLE_URL=https://localhost:8444/
+PREFLIGHT_TENANT_ID=example-tenant
+PREFLIGHT_TOKEN_URL=https://auth.openg7.test/realms/openg7/protocol/openid-connect/token
+PREFLIGHT_CLIENT_ID=funding-preflight-inbox
+PREFLIGHT_CLIENT_SECRET_FILE=/absolute/private/path/funding-preflight-inbox-client
+```
+
+Remplacer le tenant et le client illustratifs par ceux du provisionnement
+autorisé. Protéger le secret par ses droits hôte et le rendre lisible par l'UID
+1000 de l'API. Sa source est montée en lecture seule. Au démarrage, l'overlay
+copie sa valeur sans l'afficher dans un tmpfs privé de l'API : répertoire `0700`,
+fichier `0400`, appartenant à cet UID. Cette copie est nécessaire notamment
+avec Docker Desktop, dont les montages Windows peuvent présenter un mode
+`0777` malgré les ACL privées de l'hôte. Elle disparaît à l'arrêt du conteneur.
+Le backend conserve son contrôle strict du fichier privé. La CA publique déjà
+montée par `docker-compose.identity.local.yml` reste dans `NODE_EXTRA_CA_CERTS`.
+
+Depuis Funding, contrôler la composition sans afficher les variables privées :
+
+```sh
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.local-tls.yml -f docker-compose.identity.yml -f docker-compose.identity.local.yml -f docker-compose.preflight-inbox.yml config --quiet
+```
+
+Cet overlay force `PREFLIGHT_ENABLED=false` et laisse
+`PREFLIGHT_INBOX_ENABLED=false` par défaut. Activer explicitement la seule
+consultation après provisionnement et vérification HTTPS. Sans activation,
+Funding affiche le raccordement désactivé; une erreur de transport reste visible
+et ne devient pas une liste vide. Cette zone lit les propositions disponibles
+dans Preflight, sans import durable ni mutation d'un dossier Funding. Conserver
+ce même overlay pour les recréations locales suivantes.
 
 ### Recette locale avec Keycloak réel
 

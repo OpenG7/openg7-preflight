@@ -86,7 +86,12 @@ services:
     tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    networks: [default]
+    networks:
+      default: {}
+      local-identity-gateway:
+        # Dedicated TLS name for Funding's server-side inbox reads.
+        # Never reuse Funding's generic "api" alias on this shared network.
+        aliases: [preflight.openg7.test]
     ports: ["127.0.0.1:${PREFLIGHT_LOCAL_WEB_PORT:-8444}:8443"]
     volumes:
       - ./infrastructure/identity/nginx.local.conf:/etc/nginx/nginx.conf:ro
