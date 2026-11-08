@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { missionInputSchema, preparationOutputSchema, sourceEventSchema } from '../packages/contracts/src/index.js';
+import { editorialContextSchema, editorialPreparationSchema, missionInputSchema, preparationOutputSchema, sourceEventSchema } from '../packages/contracts/src/index.js';
 const mission = {
   schemaVersion: '1.0', tenantId: 'tenant-a',
   source: { application: 'openg7-social', subjectType: 'editorial-topic', subjectId: 'subject-1', version: 1 },
@@ -27,4 +27,46 @@ test('structured model output and versioned event envelopes reject invented auth
   assert.equal(preparationOutputSchema.safeParse({ title: 'Titre', summary: 'Résumé', body: 'Brouillon', warnings: [], approved: true }).success, false);
   assert.equal(sourceEventSchema.safeParse({ schemaVersion: '1.0', eventId: 'evt', type: 'mission.submitted', mission }).success, true);
   assert.equal(sourceEventSchema.safeParse({ schemaVersion: '1.0', eventId: 'evt', type: 'business.approved', mission }).success, false);
+});
+
+const context = {
+  schemaVersion: '1.0', sourceCommitmentId: 'commitment-synthetic', sourceSnapshotDigest: 'a'.repeat(64), commitmentVersion: 2,
+  publicIdentity: { consent: false }, sourceFacts: [], missingInformation: ['organization_name', 'contact_email'],
+  destinations: [
+    { destination: 'website', obligationId: 'web-synthetic', obligationVersion: 3, format: 'individual' },
+    { destination: 'facebook', obligationId: 'social-synthetic', obligationVersion: 4, format: 'collective' },
+  ], mediaReferences: [],
+};
+
+test('optional editorial snapshot permits missing identity and preserves independent obligation versions', () => {
+  const value = editorialContextSchema.parse(context);
+  assert.equal(value.publicIdentity.consent, false);
+  assert.deepEqual(value.destinations.map(destination => destination.obligationVersion), [3, 4]);
+  assert.equal(missionInputSchema.safeParse({ ...mission, input: { editorialContext: context } }).success, true);
+});
+
+test('editorial snapshot rejects unconsented names, private fields, duplicate obligations and unknown destinations', () => {
+  for (const value of [
+    { ...context, publicIdentity: { consent: false, displayName: 'Nom privé synthétique' } },
+    { ...context, privateEmail: 'synthetic@example.invalid' },
+    { ...context, destinations: [context.destinations[0], context.destinations[0]] },
+    { ...context, destinations: [{ ...context.destinations[0], destination: 'linkedin' }] },
+    { ...context, destinations: [{ ...context.destinations[0], format: 'collective' }] },
+    { ...context, commitmentVersion: 0 },
+    { ...context, mediaReferences: [{ id: 'media-synthetic', publicUseAllowed: false }] },
+  ]) assert.equal(editorialContextSchema.safeParse(value).success, false);
+});
+
+test('editorial result contracts never accept publication authority or completed delivery', () => {
+  const preparation = {
+    schemaVersion: '1.0', sourceVersion: 7, sourceCommitmentId: context.sourceCommitmentId,
+    sourceSnapshotDigest: context.sourceSnapshotDigest, commitmentVersion: 2, state: 'partial', publicationAuthorized: false,
+    common: { version: 1, title: 'Partiel', presentation: '', recognition: '', sourceFacts: [], mediaReferences: [], missingInformation: ['public_name_consent'] },
+    variants: context.destinations.map(destination => ({ ...destination, version: 1, title: 'Partiel', body: '', summary: '', mediaReferences: [], publicationAuthorized: false })),
+  };
+  assert.equal(editorialPreparationSchema.safeParse(preparation).success, true);
+  assert.equal(editorialPreparationSchema.safeParse({ ...preparation, publicationAuthorized: true }).success, false);
+  assert.equal(editorialPreparationSchema.safeParse({ ...preparation, state: 'published' }).success, false);
+  assert.equal(editorialPreparationSchema.safeParse({ ...preparation, state: 'ready_for_review' }).success, false);
+  assert.equal(editorialPreparationSchema.safeParse({ ...preparation, variants: [{ ...preparation.variants[0], delivered: true }] }).success, false);
 });

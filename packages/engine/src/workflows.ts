@@ -1,4 +1,4 @@
-import type { MissionInput } from '../../contracts/src/index.js';
+import { editorialContextSchema, type MissionInput } from '../../contracts/src/index.js';
 
 export interface TaskDefinition { key: string; kind: string; dependencies: string[] }
 export interface WorkflowDefinition {
@@ -6,14 +6,18 @@ export interface WorkflowDefinition {
   version: string;
   sourceApplication: string;
   requiredInput: string[];
+  requiredInputFor?: (input: Record<string, unknown>) => string[];
   inputTypes?: Record<string,'string'|'string[]'>;
+  validateInput?: (input: Record<string, unknown>) => string[];
   capability: 'web-presentation' | 'editorial-brief';
   policy: string;
 }
 
 /** Workflows supply source contracts and capabilities; the scheduler has no business rules. */
 export const workflows: WorkflowDefinition[] = [
-  { type: 'sponsorship-preparation-v1', version: '1.0', sourceApplication: 'funding-platform', requiredInput: ['title', 'description', 'benefits'], inputTypes:{title:'string',description:'string',benefits:'string[]'}, capability: 'web-presentation', policy: 'preparation-only-v1' },
+  { type: 'sponsorship-preparation-v1', version: '1.0', sourceApplication: 'funding-platform', requiredInput: ['title', 'description', 'benefits'], inputTypes:{title:'string',description:'string',benefits:'string[]'}, capability: 'web-presentation', policy: 'preparation-only-v1',
+    requiredInputFor: input => input['editorialContext'] === undefined ? ['title', 'description', 'benefits'] : ['editorialContext'],
+    validateInput: input => input['editorialContext'] === undefined || editorialContextSchema.safeParse(input['editorialContext']).success ? [] : ['editorialContext'] },
   { type: 'editorial-brief-preparation-v1', version: '1.0', sourceApplication: 'openg7-social', requiredInput: ['topic'], inputTypes:{topic:'string',audience:'string'}, capability: 'editorial-brief', policy: 'preparation-only-v1' },
 ];
 
@@ -37,7 +41,7 @@ export function planWorkflow(_definition: WorkflowDefinition): TaskDefinition[] 
 }
 
 export function missingInput(definition: WorkflowDefinition, input: Record<string, unknown>): string[] {
-  return definition.requiredInput.filter(key => {
+  return (definition.requiredInputFor?.(input) ?? definition.requiredInput).filter(key => {
     const value = input[key];
     return value == null || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && value.length === 0);
   });
@@ -47,7 +51,7 @@ export function invalidInput(definition:WorkflowDefinition,input:Record<string,u
   return Object.entries(definition.inputTypes??{}).filter(([key,kind])=>{
     const value=input[key];if(value==null)return false;
     return kind==='string'?typeof value!=='string':!Array.isArray(value)||value.some(item=>typeof item!=='string');
-  }).map(([key])=>key);
+  }).map(([key])=>key).concat(definition.validateInput?.(input) ?? []);
 }
 
 export function validatePlan(tasks: readonly TaskDefinition[]): void {

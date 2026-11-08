@@ -1,4 +1,5 @@
 import { z } from 'zod';
+export { editorialContextSchema, editorialPreparationSchema, type EditorialContext, type EditorialPreparation } from './editorial.js';
 
 export const schemaVersion = '1.0' as const;
 const identifier = z.string().trim().min(1).max(128);

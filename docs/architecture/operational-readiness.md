@@ -62,13 +62,19 @@ ci-dessous ne qualifient pas un déploiement ou une identité de production.
 | VPS-01/03 | Compose production, Angular/Nginx, TLS PostgreSQL privé, secrets fichiers, migrations et recette locale de 14 contrôles | Hôte réel, HTTPS public, sauvegarde/restauration hors VPS |
 | VPS-02 | Console Authorization Code/PKCE S256, JWT/JWKS et contrôles state/nonce | Realm, clients, claims, sessions et politiques réels |
 | VPS-05 | Redémarrages configurés, ressources bornées, santé API/web/worker et logs expurgés | Reboot hôte, supervision et alertes réelles |
-| FUNDING-01/02 | Snapshot minimisé, révision monotone, outbox atomique et relais OAuth2 | Activation et identités de préproduction |
-| FUNDING-03/04 | Invalidation par réconciliation, import privé contrôlé et panneau Funding en lecture seule; annulation service versionnée disponible | Événements de chaque mutation et branchement métier de l’annulation |
+| FUNDING-01/02 | Snapshot minimisé, révision monotone, registre transactionnel des changements et relais OAuth2 | Activation et identités de préproduction |
+| FUNDING-03/04 | Invalidation, proposition éditoriale commune et déclinaisons dans l’Atelier Funding, adoption contrôlée sans approbation; annulation service versionnée disponible | Qualification du raccordement et branchement métier de l’annulation |
 | FUNDING-06 | Activation Funding → OAuth/JWKS → API/worker PostgreSQL Preflight → proposition importée; refus tenant et versions testés | Identités et raccordement de préproduction |
 
 Procédure : [déploiement VPS](../deployment-vps.md). Recette inter-dépôts :
 `FUNDING_CONNECTOR_ROOT` désigne un checkout Funding compilé; exécuter
 `npm run test:funding` depuis Preflight avec TEST_DATABASE_URL de test.
+
+La recette inter-dépôts du 8 novembre 2026 utilise le raccordement de l’Atelier
+présent dans le checkout Funding : PostgreSQL jetables, transport OAuth/JWKS et
+worker Preflight réels, fournisseur IA simulé. Elle couvre panne, réponse perdue,
+reprise sans doublon, préparation partielle, version source et isolation. Elle
+ne qualifie ni une inférence payante, ni une diffusion ou identité de production.
 
 ### Préparer le VPS
 
