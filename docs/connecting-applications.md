@@ -103,7 +103,7 @@ sequenceDiagram
 | --- | --- | --- |
 | Authentifier Funding | JWT vérifié, rôle service_integration, tenant et applications | Client credentials livré; provisionner l’identité réelle et ses claims limités à funding-platform |
 | Confier une préparation | POST /api/events avec mission.submitted, ou POST /api/missions | Outbox transactionnelle et relais livrés; activation désactivée par défaut |
-| Préparer le brouillon | sponsorship-preparation-v1, version1.0 | editorialContext optionnel, contenu commun et déclinaisons Web/Facebook; anciennes entrées v1 compatibles |
+| Préparer le brouillon | sponsorship-preparation-v1, version1.0 | editorialContext optionnel, contenu commun et déclinaisons Web/Facebook/LinkedIn; anciennes entrées v1 compatibles |
 | Consulter la préparation | GET /api/missions/:id et GET /api/proposals?application=funding-platform&status=prepared | Retour privé contrôlé puis adoption humaine dans les brouillons Funding |
 | Préparer une revue collective | API review-batches, exclusion et export versionnés | Réutiliser la sélection dans Funding avec contrôle de chaque dossier et des droits de l’appelant |
 | Invalider un ancien travail | POST /api/events avec source.updated | Changements pertinents capturés transactionnellement puis réconciliés; anciennes propositions conservées comme obsolètes |

@@ -87,7 +87,7 @@ test('PostgreSQL durable engine: complete workflows, tenants, versions, batching
       const commitmentId=randomUUID();
       const context={schemaVersion:'1.0',sourceCommitmentId:commitmentId,sourceSnapshotDigest:'a'.repeat(64),commitmentVersion:1,
         publicIdentity:{consent:false},sourceFacts:[],missingInformation:['organization_name','contact_email'],mediaReferences:[],
-        destinations:[{destination:'website',obligationId:randomUUID(),obligationVersion:2,format:'individual'},{destination:'facebook',obligationId:randomUUID(),obligationVersion:3,format:'collective'}]};
+        destinations:[{destination:'website',obligationId:randomUUID(),obligationVersion:2,format:'individual'},{destination:'facebook',obligationId:randomUUID(),obligationVersion:3,format:'collective'},{destination:'linkedin',obligationId:randomUUID(),obligationVersion:4,format:'collective'}]};
       const submitted=input('funding',{source:{application:'funding-platform',subjectType:'sponsorship-commitment',subjectId:commitmentId,version:1},
         input:{editorialContext:context}});
       const mission=await service.submit(submitted,scope);
@@ -96,7 +96,7 @@ test('PostgreSQL durable engine: complete workflows, tenants, versions, batching
       assert.equal(proposal.state,'partial');assert.equal(proposal.publicationAuthorized,false);
       assert.ok(proposal.common.missingInformation.includes('public_name_consent'));
       assert.ok(proposal.variants.every(variant=>variant.body===''&&!variant.publicationAuthorized));
-      assert.deepEqual(proposal.variants.map(variant=>variant.obligationVersion),[2,3]);
+      assert.deepEqual(proposal.variants.map(variant=>variant.obligationVersion),[2,3,4]);
       const provenance=(detail!.proposals[0] as Record<string,unknown>)['provenance'] as Record<string,unknown>;
       assert.equal(provenance['simulated'],true);
       const source={...submitted.source,version:2};
@@ -109,7 +109,8 @@ test('PostgreSQL durable engine: complete workflows, tenants, versions, batching
       const preparation=editorialPreparationSchema.parse((updated!.proposals[0] as Record<string,unknown>)['editorialPreparation']);
       assert.equal(preparation.state,'ready_for_review');assert.equal(preparation.sourceVersion,2);
       assert.equal(preparation.commitmentVersion,1);assert.equal(preparation.common.version,1);
-      assert.equal(preparation.publicationAuthorized,false);assert.equal(preparation.variants.length,2);
+      assert.equal(preparation.publicationAuthorized,false);assert.equal(preparation.variants.length,3);
+      assert.deepEqual(preparation.variants.map(variant=>variant.destination),['website','facebook','linkedin']);
     });
     await t.test('versioned homogeneous proposal batches allow exclusion and prevent direct business approval',async()=>{
       const batch=await service.buildBatch({proposalIds:[firstProposalId,secondProposalId]},scope);assert.equal(batch.items.length,2);

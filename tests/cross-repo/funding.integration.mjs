@@ -30,7 +30,7 @@ async function until(read, accept, timeout = 30000) {
   assert.fail('The durable publication preparation did not reach its expected state.');
 }
 
-test('Funding publication workshop -> signed OAuth/JWKS -> real Preflight worker -> private versioned proposals', { timeout: 180000 }, async t => {
+test('Funding 500 CAD workshop -> signed OAuth/JWKS -> real Preflight worker -> three private versioned variants', { timeout: 180000 }, async t => {
   // Funding is always a new local tmpfs container; Preflight uses only the explicit test URL.
   const sourceDb = await startDisposablePostgres();
   const schema = `cross_test_${randomUUID().replaceAll('-', '')}`, bossSchema = `boss_${schema}`;
@@ -76,13 +76,13 @@ test('Funding publication workshop -> signed OAuth/JWKS -> real Preflight worker
     let workshop = new PublicationWorkshopService(sourceDb.pool, config, { client }); await workshop.ready();
     const operationId = randomUUID(), sessionId = `cs_synthetic_${randomUUID()}`, paymentId = `pi_synthetic_${randomUUID()}`, reference = `SYNTHETIC-${randomUUID()}`;
     await sourceDb.pool.query("INSERT INTO checkout_operations(id,key_hash,request_hash,state,params,contribution_input) VALUES($1,$2,$3,'prepared','{}','{}')", [operationId, operationId, operationId]);
-    await withPostgresTransaction(sourceDb.pool, db => offers.recordCheckoutSponsorshipOffer(db, operationId, { publicReference: reference, quote: offers.quoteSponsorshipOffer(25000, 'CAD') }));
-    await sourceDb.pool.query("INSERT INTO stripe_checkout_sessions(stripe_session_id,stripe_payment_intent_id,contribution_type,amount_cents,currency,metadata,status) VALUES($1,$2,'sponsorship_interest',25000,'cad',$3,'paid')", [sessionId, paymentId, { openg7CheckoutOperationId: operationId }]);
+    await withPostgresTransaction(sourceDb.pool, db => offers.recordCheckoutSponsorshipOffer(db, operationId, { publicReference: reference, quote: offers.quoteSponsorshipOffer(50000, 'CAD') }));
+    await sourceDb.pool.query("INSERT INTO stripe_checkout_sessions(stripe_session_id,stripe_payment_intent_id,contribution_type,amount_cents,currency,metadata,status) VALUES($1,$2,'sponsorship_interest',50000,'cad',$3,'paid')", [sessionId, paymentId, { openg7CheckoutOperationId: operationId }]);
     const contributionId = (await sourceDb.pool.query(`INSERT INTO fund_contributions(contribution_type,amount_cents,currency,status,paid_at,public_reference,
       stripe_session_id,stripe_payment_intent_id,public_display_consent,display_amount_consent,sponsor_review_status,sponsor_site_visibility_held)
-      VALUES('sponsorship_interest',25000,'cad','paid',NOW(),$1,$2,$3,FALSE,FALSE,'pending_review',TRUE) RETURNING id`, [reference, sessionId, paymentId])).rows[0].id;
+      VALUES('sponsorship_interest',50000,'cad','paid',NOW(),$1,$2,$3,FALSE,FALSE,'pending_review',TRUE) RETURNING id`, [reference, sessionId, paymentId])).rows[0].id;
     await withPostgresTransaction(sourceDb.pool, db => activation.activateSponsorshipCommitments(db, { stripeSessionId: sessionId, stripePaymentIntentId: paymentId,
-      trustedPaymentFacts: { amountCents: 25000, currency: 'CAD', publicReference: reference } }));
+      trustedPaymentFacts: { amountCents: 50000, currency: 'CAD', publicReference: reference } }));
     const countMissions = async () => (await sourceDb.pool.query('SELECT count(*)::int AS n FROM preflight_workshop_missions')).rows[0].n;
     const retryNow = async () => sourceDb.pool.query('UPDATE preflight_workshop_missions SET next_attempt_at=NOW() WHERE tenant_id=$1', [tenantId]);
     const assertNoBusinessDecision = async () => {
@@ -104,7 +104,7 @@ test('Funding publication workshop -> signed OAuth/JWKS -> real Preflight worker
       assert.equal(state.proposal, null); assert.equal(state.canAdopt, false);
       firstPayload = (await sourceDb.pool.query('SELECT payload FROM preflight_workshop_missions WHERE id=$1', [state.mission.id])).rows[0].payload;
       assert.equal(firstPayload.input.editorialContext.publicIdentity.consent, false); assert.deepEqual(firstPayload.input.editorialContext.sourceFacts, []);
-      assert.deepEqual(new Set(firstPayload.input.editorialContext.destinations.map(value => value.destination)), new Set(['website', 'facebook']));
+      assert.deepEqual(new Set(firstPayload.input.editorialContext.destinations.map(value => value.destination)), new Set(['website', 'facebook', 'linkedin']));
       const command = { contributionId, expectedSourceVersion: 1, requestId: randomUUID() };
       const prepared = await workshop.prepare(command, 'synthetic-administrator');
       assert.equal((await workshop.prepare(command, 'synthetic-administrator')).mission.id, prepared.mission.id);
@@ -122,6 +122,7 @@ test('Funding publication workshop -> signed OAuth/JWKS -> real Preflight worker
       assert.equal(firstProposal.editorialPreparation.state, 'partial'); assert.equal(firstProposal.editorialPreparation.publicationAuthorized, false);
       assert.ok(firstProposal.editorialPreparation.common.missingInformation.includes('contact_email')); assert.ok(firstProposal.editorialPreparation.common.missingInformation.includes('public_name_consent'));
       assert.ok(firstProposal.editorialPreparation.variants.every(value => !value.body && !value.publicationAuthorized));
+      assert.equal(firstProposal.editorialPreparation.variants.length, 3);
       assert.equal((await client.submit(firstPayload)).duplicate, true); await workshop.tick(); assert.equal(await countMissions(), 1);
       assert.equal((await sourceDb.pool.query('SELECT count(*)::int AS n FROM preflight_workshop_proposals')).rows[0].n, 1); assert.equal(tokenCalls, 1);
       const scope = { tenantId, subject: 'synthetic-reviewer', roles: ['viewer'], applications: ['funding-platform'], correlationId: randomUUID() };

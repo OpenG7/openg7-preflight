@@ -18,7 +18,7 @@ Le monolithe modulaire possède une API Fastify, un worker indépendant, Postgre
 une file pg-boss, des contrats Zod versionnés et une console Angular standalone.
 Deux workflows utilisent le même moteur :
 
-- `sponsorship-preparation-v1` : présentation Web à partir d’un engagement synthétique Funding.
+- `sponsorship-preparation-v1` : préparation Web/Facebook/LinkedIn à partir d’un engagement synthétique Funding.
 - `editorial-brief-preparation-v1` : brief éditorial à partir d’un sujet synthétique Social.
 
 Le parcours est réel : **API → PostgreSQL → worker → résultats → proposition → briefing**.
@@ -138,6 +138,8 @@ Arrêter l’infrastructure locale sans effacer les données : `npm run infra:do
 - [Diagnostic](docs/troubleshooting.md) et [état vérifié, compatibilité et limites](docs/architecture/operational-readiness.md).
 - [Travaux restants : VPS et raccordement Funding](docs/architecture/operational-readiness.md#travaux-restants).
 - [Vérifications du connecteur et de la stack VPS](docs/validation-funding-vps.md).
+- [Plan de recette des prestations et regroupement des attentes](docs/recette-parcours-prestations.md).
+- [Qualification du cycle 500 CAD : preuves et limites](docs/qualification-cycle-prestations-2026-11-18.md).
 - [Préparer le VPS](docs/deployment-vps.md).
 - [Consignes](AGENTS.md) et [standard commun OpenG7](docs/standards/README.md).
 

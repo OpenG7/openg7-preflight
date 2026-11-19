@@ -45,12 +45,24 @@ test('optional editorial snapshot permits missing identity and preserves indepen
   assert.equal(missionInputSchema.safeParse({ ...mission, input: { editorialContext: context } }).success, true);
 });
 
+test('a three-benefit sponsorship accepts LinkedIn without losing its obligation or media scope', () => {
+  const value = editorialContextSchema.parse({
+    ...context,
+    destinations: [...context.destinations, { destination: 'linkedin', obligationId: 'linkedin-synthetic', obligationVersion: 5, format: 'collective' }],
+    mediaReferences: [{ id: 'linkedin-media', publicUseAllowed: true, destinations: ['linkedin'] }],
+  });
+  assert.deepEqual(value.destinations.map(destination => [destination.destination, destination.obligationVersion]), [
+    ['website', 3], ['facebook', 4], ['linkedin', 5],
+  ]);
+  assert.deepEqual(value.mediaReferences[0]?.destinations, ['linkedin']);
+});
+
 test('editorial snapshot rejects unconsented names, private fields, duplicate obligations and unknown destinations', () => {
   for (const value of [
     { ...context, publicIdentity: { consent: false, displayName: 'Nom privé synthétique' } },
     { ...context, privateEmail: 'synthetic@example.invalid' },
     { ...context, destinations: [context.destinations[0], context.destinations[0]] },
-    { ...context, destinations: [{ ...context.destinations[0], destination: 'linkedin' }] },
+    { ...context, destinations: [{ ...context.destinations[0], destination: 'instagram' }] },
     { ...context, destinations: [{ ...context.destinations[0], format: 'collective' }] },
     { ...context, commitmentVersion: 0 },
     { ...context, mediaReferences: [{ id: 'media-synthetic', publicUseAllowed: false }] },

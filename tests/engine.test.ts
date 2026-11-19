@@ -75,6 +75,23 @@ test('consented public facts yield independent web and facebook adaptations with
   assert.deepEqual(editorialProviderData(input)['publicFacts'], editorialContext.sourceFacts);
 });
 
+test('LinkedIn receives its own prepared variant and only media allowed for that destination', () => {
+  const proposal = prepareEditorialProposal({ editorialContext: {
+    ...editorialContext, publicIdentity: { consent: true, displayName: 'Organisation synthétique' }, missingInformation: [],
+    destinations: [...editorialContext.destinations, { destination: 'linkedin', obligationId: 'linkedin-synthetic', obligationVersion: 5, format: 'collective' }],
+    mediaReferences: [{ id: 'web-only', publicUseAllowed: true, destinations: ['website'] }, { id: 'linkedin-only', publicUseAllowed: true, destinations: ['linkedin'] }],
+  } }, editorialDraft, 7)!;
+  assert.equal(proposal.state, 'ready_for_review');
+  assert.deepEqual(proposal.variants.map(variant => [variant.destination, variant.obligationId, variant.obligationVersion]), [
+    ['website', 'web-synthetic', 3], ['facebook', 'social-synthetic', 4], ['linkedin', 'linkedin-synthetic', 5],
+  ]);
+  assert.equal(proposal.variants[2]?.body, editorialDraft.summary);
+  assert.deepEqual(proposal.variants[0]?.mediaReferences.map(media => media.id), ['web-only']);
+  assert.deepEqual(proposal.variants[1]?.mediaReferences, []);
+  assert.deepEqual(proposal.variants[2]?.mediaReferences.map(media => media.id), ['linkedin-only']);
+  assert.ok(proposal.variants.every(variant => !variant.publicationAuthorized));
+});
+
 test('media references require destination scope and never inherit a web authorization for facebook', () => {
   const proposal = prepareEditorialProposal({ editorialContext: {
     ...editorialContext, publicIdentity: { consent: true, displayName: 'Organisation synthétique' }, missingInformation: [],
@@ -90,12 +107,14 @@ test('destination adaptations obey Funding field limits while retaining the comp
   const draft = { title: 'T'.repeat(200), body: 'B'.repeat(20000), summary: 'S'.repeat(4000), warnings: [] };
   const proposal = prepareEditorialProposal({ editorialContext: {
     ...editorialContext, publicIdentity: { consent: true, displayName: 'Organisation synthétique' }, missingInformation: [],
+    destinations: [...editorialContext.destinations, { destination: 'linkedin', obligationId: 'linkedin-synthetic', obligationVersion: 5, format: 'collective' }],
   } }, draft, 7)!;
   assert.equal(proposal.common.title.length, 160);
   assert.equal(proposal.common.presentation.length, 20000);
   assert.equal(proposal.common.recognition.length, 4000);
   assert.equal(proposal.variants[0]?.body.length, 20000);
   assert.equal(proposal.variants[1]?.body.length, 2500);
+  assert.equal(proposal.variants[2]?.body.length, 2500);
   assert.ok(proposal.variants.every(variant => variant.summary.length === 500));
 });
 
