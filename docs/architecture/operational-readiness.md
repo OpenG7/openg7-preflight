@@ -113,6 +113,13 @@ ne qualifie ni une inférence payante, ni une diffusion ou identité de producti
 
 Le [parcours et les responsabilités](../connecting-applications.md#raccordement-de-funding-platform)
 décrivent les échanges; les points ci-dessous suivent uniquement le travail restant.
+Le [plan de recette des prestations](../recette-parcours-prestations.md) précise
+la matrice des parcours complets et les critères de regroupement commanditaire,
+administration, dossiers mixtes et attentes techniques. Ces critères restent à
+implémenter ou à qualifier; ce plan ne constitue pas une preuve d’exécution.
+Le [bilan de qualification 500 CAD](../qualification-cycle-prestations-2026-11-18.md)
+distingue les ruptures corrigées, les exécutions observées et les prérequis de
+livraison réelle restant ouverts.
 
 - [ ] **FUNDING-01 — Contrat source.** Convenir du déclencheur métier, de l’objet
   analysé, du tenant et des données minimales. Définir la révision entière monotone

@@ -2,14 +2,15 @@ import { z } from 'zod';
 
 const identifier = z.string().trim().min(1).max(128);
 const version = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const destinations = ['website', 'facebook', 'linkedin'] as const;
 const sourceFactSchema = z.object({ key: identifier, value: z.string().min(1).max(4000) }).strict();
 const mediaReferenceSchema = z.object({
   id: identifier,
   publicUseAllowed: z.literal(true),
-  destinations: z.array(z.enum(['website', 'facebook'])).min(1).max(2).optional(),
+  destinations: z.array(z.enum(destinations)).min(1).max(3).optional(),
 }).strict();
 const destinationBaseSchema = z.object({
-  destination: z.enum(['website', 'facebook']),
+  destination: z.enum(destinations),
   obligationId: identifier,
   obligationVersion: version,
   format: z.enum(['individual', 'collective']),
@@ -59,7 +60,8 @@ export const editorialPreparationSchema = z.object({
     publicationAuthorized: z.literal(false),
   }).strict()
     .refine(value => value.destination !== 'website' || value.format === 'individual', 'website_format_invalid')
-    .refine(value => value.destination !== 'facebook' || value.body.length <= 2500, 'facebook_body_too_long')).min(1).max(20)
+    .refine(value => value.destination !== 'facebook' || value.body.length <= 2500, 'facebook_body_too_long')
+    .refine(value => value.destination !== 'linkedin' || value.body.length <= 2500, 'linkedin_body_too_long')).min(1).max(20)
     .refine(values => new Set(values.map(value => value.obligationId)).size === values.length, 'duplicate_obligation'),
 }).strict().refine(value => value.state !== 'ready_for_review' || value.common.missingInformation.length === 0, 'missing_information');
 export type EditorialPreparation = z.infer<typeof editorialPreparationSchema>;

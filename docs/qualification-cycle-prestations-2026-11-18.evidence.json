@@ -1,0 +1,180 @@
+{
+  "scope": "Synthetic 500 CAD sponsorship; real local APIs, relay and workers; simulated external providers",
+  "fundingRevision": "4842e5ea0cf5b053aeceb13f5e5ad01b6ba89555",
+  "preflightRevision": "d61af156e4fef1ad98ca1856d7748f813efa58cd",
+  "workingTreesModified": {
+    "funding": true,
+    "preflight": true
+  },
+  "browserResult": {
+    "startTime": "2026-11-19T00:54:56.660Z",
+    "duration": 78225.52399999999,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "contribution": {
+    "id": "85a4a44f-5e15-4a4f-bb6b-9f39204c5f34",
+    "reference": "OG7-2026-S3WCMJ",
+    "amountMinor": 50000,
+    "currency": "CAD"
+  },
+  "preparation": {
+    "missionId": "fb48a0a9-3eda-48a7-8e34-dc05f6f9a235",
+    "sourceVersion": 5,
+    "proposalId": "1269c0a1-11c8-4d88-a058-c71e28f11f3a",
+    "sourceSnapshotDigest": "2c57555f786fba1d6c7ba6a253512ed3fe5eb2808f4472bf7a4c9021b20c97c7",
+    "status": "review_ready",
+    "tasks": [
+      {
+        "kind": "draft",
+        "status": "completed",
+        "attempts": 1
+      },
+      {
+        "kind": "completeness",
+        "status": "completed",
+        "attempts": 1
+      },
+      {
+        "kind": "preparation-policy",
+        "status": "completed",
+        "attempts": 1
+      },
+      {
+        "kind": "review-proposal",
+        "status": "completed",
+        "attempts": 1
+      },
+      {
+        "kind": "output-check",
+        "status": "completed",
+        "attempts": 1
+      }
+    ],
+    "variants": [
+      {
+        "destination": "facebook",
+        "obligationId": "a9a92051-793a-49d4-837c-948daaf230ce",
+        "obligationVersion": 1
+      },
+      {
+        "destination": "linkedin",
+        "obligationId": "94a19d64-0712-4506-b2f8-369265d67bb7",
+        "obligationVersion": 1
+      },
+      {
+        "destination": "website",
+        "obligationId": "62b3a49a-4b3d-453d-982e-0980560a8b2b",
+        "obligationVersion": 1
+      }
+    ],
+    "adoptedDrafts": [
+      {
+        "id": "1246de68-9b0f-46f4-94d4-a01df0e1c95b",
+        "obligationId": "a9a92051-793a-49d4-837c-948daaf230ce",
+        "channel": "facebook"
+      },
+      {
+        "id": "8c0d8641-a8ec-40a8-8dd2-9c6102224b51",
+        "obligationId": "94a19d64-0712-4506-b2f8-369265d67bb7",
+        "channel": "linkedin"
+      }
+    ]
+  },
+  "deliveries": [
+    {
+      "id": "5d0dbd75-b5e9-40f7-b1fa-e94a4acb677c",
+      "feedId": "openg7:facebook",
+      "batchId": "081ee90d-d399-4961-b5d2-d29e55091a9a",
+      "status": "published",
+      "mode": "mock",
+      "attempts": 1,
+      "externalPostId": "mock-5d0dbd75-b5e9-40f7-b1fa-e94a4acb677c"
+    },
+    {
+      "id": "5b253853-c9ff-466f-988f-7354e8586dd4",
+      "feedId": "openg7:linkedin",
+      "batchId": "abaa0a11-9d9b-43b6-96cd-2f5bbda95cb6",
+      "status": "published",
+      "mode": "mock",
+      "attempts": 1,
+      "externalPostId": "mock-5b253853-c9ff-466f-988f-7354e8586dd4"
+    }
+  ],
+  "obligations": [
+    {
+      "id": "a9a92051-793a-49d4-837c-948daaf230ce",
+      "channel": "facebook",
+      "state": "pending",
+      "version": 1,
+      "fulfilmentEvidenceId": null
+    },
+    {
+      "id": "94a19d64-0712-4506-b2f8-369265d67bb7",
+      "channel": "linkedin",
+      "state": "pending",
+      "version": 1,
+      "fulfilmentEvidenceId": null
+    },
+    {
+      "id": "62b3a49a-4b3d-453d-982e-0980560a8b2b",
+      "channel": "website",
+      "state": "fulfilled",
+      "version": 2,
+      "fulfilmentEvidenceId": "ecbb8e4b-e78d-4afd-8ea4-aa03f8140dd6"
+    }
+  ],
+  "fulfilmentEvidence": [
+    {
+      "id": "ecbb8e4b-e78d-4afd-8ea4-aa03f8140dd6",
+      "obligationId": "62b3a49a-4b3d-453d-982e-0980560a8b2b",
+      "provenance": "website_verified",
+      "visibility": "unknown"
+    }
+  ],
+  "reconciliation": {
+    "missionId": "9ad146ba-e0bc-4b8b-a814-51482589328b",
+    "sourceVersion": 8,
+    "remainingDestinations": [
+      "facebook",
+      "linkedin"
+    ],
+    "oldMissionId": "fb48a0a9-3eda-48a7-8e34-dc05f6f9a235",
+    "oldMissionStatus": "superseded",
+    "sourceDecisionTransport": "not connected; no global completion asserted"
+  },
+  "limits": [
+    "No real social publication or social fulfilment demonstrated",
+    "No global source-decision completion asserted",
+    "Website visibility observed at test time; no continuous observation guarantee"
+  ],
+  "originalArtifacts": [
+    {
+      "path": "test-results/acceptance-preflight-passed-20261118/run.json",
+      "bytes": 439,
+      "sha256": "ce40ea2e378d9bcc3749344ca78ecbdb9ccc05ce0880ca8b0efb32d21be10b56"
+    },
+    {
+      "path": "test-results/acceptance-preflight-passed-20261118/results.json",
+      "bytes": 48470,
+      "sha256": "9b6e5634ffffc356749254ab6ef4ab538536f713cad49063491cc04b2d666edf"
+    },
+    {
+      "path": "test-results/acceptance-preflight-passed-20261118/preflight-chain-evidence.json",
+      "bytes": 5710,
+      "sha256": "7c081147e516906b85f2ef2451ecd7dbf5e3419afd40ef2ceb6c3bd542be478d"
+    },
+    {
+      "path": "test-results/acceptance-preflight-passed-20261118/preflight-reconciliation-evidence.json",
+      "bytes": 315,
+      "sha256": "d748b58027905d1d65b7da29736aa15f039ddc6d5611fadfd3aa7a38c8512360"
+    },
+    {
+      "path": "test-results/acceptance-preflight-passed-20261118/sponsorship-publication-evidence.json",
+      "bytes": 20749,
+      "sha256": "40a93868bb4dc4de306009607822c9c3acf904c2452778897d3c11a1d5a9898e"
+    }
+  ]
+}
